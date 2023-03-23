@@ -1,5 +1,5 @@
 from raft.election import elect
-from raft.consensus import 
+from raft.consensus import appendEntry
 
 STATE = {
 	'CANDIDATE': 1,
@@ -8,7 +8,7 @@ STATE = {
 }
 
 store = {}
-state = STATE['CANDIDATE']
+state = STATE['FOLLOWER']
 log = []
 
 def recover():
@@ -27,4 +27,7 @@ def insertToLog(message):
 	pass
 
 def commitLog(index):
+	pass
+
+def accept(message):
 	pass
