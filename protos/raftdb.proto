@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+service ClientRequest {
+	rpc SendRequest (ClientReq) returns (Response) {} 
+}
+
+service Raft {
+	rpc AppendEntries (LogEntry) returns (Response) {}
+}
+
+message ClientReq {
+	int type = 1;
+	int key = 2;
+	int value = 3;
+}
+
+message Response {
+	int code = 1;
+	int value = 2;
+}
+
+message LogEntry {
+	int heartbeat = 1;
+	int type = 1;
+	int key = 2;
+	int value = 3;
+}
