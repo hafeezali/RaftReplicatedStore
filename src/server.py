@@ -1,33 +1,44 @@
 from raft.election import elect
 from raft.consensus import appendEntry
 
+import grpc
+
 STATE = {
 	'CANDIDATE': 1,
 	'FOLLOWER': 2,
 	'LEADER': 3	
 }
 
-store = {}
-state = STATE['FOLLOWER']
-log = []
+class Server:
 
-def recover():
-	pass
+	def __init__():
+		self.store = dict()
+		self.state = STATE['FOLLOWER']
+		self.log = list()
+		self.port = '50051'
 
-def listen():
-	pass
+	def recover():
+		pass
 
-def handleGet(key):
-	pass
+	def listen():
+		self.server = grpc.server(futures.ThreadPoolExecutor(max_worker=10))
+		pass
 
-def handlePut(key, value):
-	pass
 
-def insertToLog(message):
-	pass
+	def handleGet(key):
+		pass
 
-def commitLog(index):
-	pass
+	def handlePut(key, value):
+		pass
 
-def accept(message):
-	pass
+	def insertToLog(message):
+		pass
+
+	def commitLog(index):
+		pass
+
+	def accept(message):
+		pass
+
+if __name__ == '__main__':
+	Server()

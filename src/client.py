@@ -1,10 +1,16 @@
-SERVER_HOST = ''
+class Client:
 
-def connect():
-	pass
+	def __init__():
+		self.server_host = 'localhost:50051'
 
-def requestGet(key):
-	pass
+	def connect():
+		pass
 
-def requestPut(key, value):
-	pass
+	def requestGet(key):
+		pass
+
+	def requestPut(key, value):
+		pass
+
+if __name__ == '__main__':
+	Client()
