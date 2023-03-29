@@ -1,7 +1,10 @@
 from raft.election import elect
 from raft.consensus import appendEntry
+from concurrent import futures
 
 import grpc
+import protos.raftdb_pb2 as raftdb
+import protos.raftdb_pb2_grpc as raftdb_grpc
 
 STATE = {
 	'CANDIDATE': 1,
@@ -9,36 +12,40 @@ STATE = {
 	'LEADER': 3	
 }
 
-class Server:
+class Server(raftdb_grpc.ClientRequestServicer):
 
-	def __init__():
+	def __init__(self):
 		self.store = dict()
 		self.state = STATE['FOLLOWER']
 		self.log = list()
 		self.port = '50051'
 
-	def recover():
+	def recover(self):
 		pass
 
-	def listen():
-		self.server = grpc.server(futures.ThreadPoolExecutor(max_worker=10))
+	def SendRequest(self, request, context):
+		if request.type == 1:
+			return raftdb.Response(code = 200, value = self.store[request.key])
+		elif request.type == 2:
+			self.store[request.key] = request.value
+			return raftdb.Response(code = 200, value = request.value)
+
+	def insertToLog(self, message):
 		pass
 
-
-	def handleGet(key):
+	def commitLog(self, index):
 		pass
 
-	def handlePut(key, value):
+	def accept(self, message):
 		pass
 
-	def insertToLog(message):
-		pass
-
-	def commitLog(index):
-		pass
-
-	def accept(message):
-		pass
+def serve():
+	port = '50051'
+	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+	raftdb_grpc.add_ClientRequestServicer_to_server(Server(), server)
+	server.add_insecure_port('[::]:' + port)
+	server.start()
+	server.wait_for_termination()
 
 if __name__ == '__main__':
-	Server()
+	server = serve()
