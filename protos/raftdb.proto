@@ -1,27 +1,57 @@
 syntax = "proto3";
 
-service ClientRequest {
-	rpc SendRequest (ClientReq) returns (Response) {}
+service Client {
+	rpc Get (GetRequest) returns (GetResponse) {}
+	rpc Put (PutRequest) returns (PutResponse) {}
 }
 
 service Raft {
-	rpc AppendEntries (LogEntry) returns (Response) {}
+	rpc AppendEntries (LogEntry) returns (LogEntryResponse) {}
+	rpc RequestVote (VoteRequest) returns (VoteResponse) {}
 }
 
-message ClientReq {
-	int32 type = 1;
-	int32 key = 2;
-	int32 value = 3;
+message GetRequest {
+	int32 key = 1;
 }
 
-message Response {
+message PutRequest {
+	int32 key = 1;
+	int32 value = 2;
+}
+
+message GetResponse {
 	int32 code = 1;
 	int32 value = 2;
 }
 
+message PutResponse {
+	int32 code = 1;
+}
+
 message LogEntry {
-	int32 heartbeat = 1;
-	int32 type = 2;
-	int32 key = 3;
-	int32 value = 4;
+
+	message Entry {
+		int32 key = 1;
+		int32 value = 2;
+	}
+
+	int32 term = 1;
+	int32 termIndex = 2;
+	int32 lastCommitIndex = 3;
+	Entry entry = 4;
+}
+
+message LogEntryResponse {
+	int32 code = 1;
+}
+
+message VoteRequest {
+	int32 term = 1;
+	int32 termIndex = 2;
+}
+
+message VoteResponse {
+	bool success = 1;
+	int32 term = 2;
+	int32 termIndex = 3;
 }

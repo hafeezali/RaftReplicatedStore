@@ -13,21 +13,33 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0craftdb.proto\"5\n\tClientReq\x12\x0c\n\x04type\x18\x01 \x01(\x05\x12\x0b\n\x03key\x18\x02 \x01(\x05\x12\r\n\x05value\x18\x03 \x01(\x05\"\'\n\x08Response\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\r\n\x05value\x18\x02 \x01(\x05\"G\n\x08LogEntry\x12\x11\n\theartbeat\x18\x01 \x01(\x05\x12\x0c\n\x04type\x18\x02 \x01(\x05\x12\x0b\n\x03key\x18\x03 \x01(\x05\x12\r\n\x05value\x18\x04 \x01(\x05\x32\x37\n\rClientRequest\x12&\n\x0bSendRequest\x12\n.ClientReq\x1a\t.Response\"\x00\x32/\n\x04Raft\x12\'\n\rAppendEntries\x12\t.LogEntry\x1a\t.Response\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0craftdb.proto\"\x19\n\nGetRequest\x12\x0b\n\x03key\x18\x01 \x01(\x05\"(\n\nPutRequest\x12\x0b\n\x03key\x18\x01 \x01(\x05\x12\r\n\x05value\x18\x02 \x01(\x05\"*\n\x0bGetResponse\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\r\n\x05value\x18\x02 \x01(\x05\"\x1b\n\x0bPutResponse\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\"\x89\x01\n\x08LogEntry\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x11\n\ttermIndex\x18\x02 \x01(\x05\x12\x17\n\x0flastCommitIndex\x18\x03 \x01(\x05\x12\x1e\n\x05\x65ntry\x18\x04 \x01(\x0b\x32\x0f.LogEntry.Entry\x1a#\n\x05\x45ntry\x12\x0b\n\x03key\x18\x01 \x01(\x05\x12\r\n\x05value\x18\x02 \x01(\x05\" \n\x10LogEntryResponse\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\".\n\x0bVoteRequest\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x11\n\ttermIndex\x18\x02 \x01(\x05\"@\n\x0cVoteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0c\n\x04term\x18\x02 \x01(\x05\x12\x11\n\ttermIndex\x18\x03 \x01(\x05\x32P\n\x06\x43lient\x12\"\n\x03Get\x12\x0b.GetRequest\x1a\x0c.GetResponse\"\x00\x12\"\n\x03Put\x12\x0b.PutRequest\x1a\x0c.PutResponse\"\x00\x32\x65\n\x04Raft\x12/\n\rAppendEntries\x12\t.LogEntry\x1a\x11.LogEntryResponse\"\x00\x12,\n\x0bRequestVote\x12\x0c.VoteRequest\x1a\r.VoteResponse\"\x00\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'raftdb_pb2', globals())
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
-  _CLIENTREQ._serialized_start=16
-  _CLIENTREQ._serialized_end=69
-  _RESPONSE._serialized_start=71
-  _RESPONSE._serialized_end=110
-  _LOGENTRY._serialized_start=112
-  _LOGENTRY._serialized_end=183
-  _CLIENTREQUEST._serialized_start=185
-  _CLIENTREQUEST._serialized_end=240
-  _RAFT._serialized_start=242
-  _RAFT._serialized_end=289
+  _GETREQUEST._serialized_start=16
+  _GETREQUEST._serialized_end=41
+  _PUTREQUEST._serialized_start=43
+  _PUTREQUEST._serialized_end=83
+  _GETRESPONSE._serialized_start=85
+  _GETRESPONSE._serialized_end=127
+  _PUTRESPONSE._serialized_start=129
+  _PUTRESPONSE._serialized_end=156
+  _LOGENTRY._serialized_start=159
+  _LOGENTRY._serialized_end=296
+  _LOGENTRY_ENTRY._serialized_start=261
+  _LOGENTRY_ENTRY._serialized_end=296
+  _LOGENTRYRESPONSE._serialized_start=298
+  _LOGENTRYRESPONSE._serialized_end=330
+  _VOTEREQUEST._serialized_start=332
+  _VOTEREQUEST._serialized_end=378
+  _VOTERESPONSE._serialized_start=380
+  _VOTERESPONSE._serialized_end=444
+  _CLIENT._serialized_start=446
+  _CLIENT._serialized_end=526
+  _RAFT._serialized_start=528
+  _RAFT._serialized_end=629
 # @@protoc_insertion_point(module_scope)

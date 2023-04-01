@@ -1,16 +1,21 @@
 # RaftReplicatedStore
 
 
-Installation:
+## Installation:
 
 python -m pip install grpcio
 python -m pip install grpcio-tools
 
-Generating gRPC code:
+## Generating gRPC code:
 
 python -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./src/protos --grpc_python_out=./src/protos ./protos/raftdb.proto
 
-Open issues:
+## Open issues:
 
 1. After generaring proto files, modify import of raftdb_pb2 and raftdb_pb2_grpc to protos.raftdb_pb2 and protos.raftdb_pb2_grpc 
 2. Stupid gitignore not working
+3. Add documentation
+	- lastCommitIndex : gives position in log
+	- termIndex : index for given term
+4. Server needs to handle redirection
+5. Reject/block client request when election in progress
