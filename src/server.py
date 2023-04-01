@@ -12,7 +12,7 @@ STATE = {
 	'LEADER': 3	
 }
 
-class Server(raftdb_grpc.ClientRequestServicer):
+class Server(raftdb_grpc.ClientServicer):
 
 	def __init__(self):
 		self.store = dict()
@@ -23,12 +23,12 @@ class Server(raftdb_grpc.ClientRequestServicer):
 	def recover(self):
 		pass
 
-	def SendRequest(self, request, context):
-		if request.type == 1:
-			return raftdb.Response(code = 200, value = self.store[request.key])
-		elif request.type == 2:
-			self.store[request.key] = request.value
-			return raftdb.Response(code = 200, value = request.value)
+	def Get(self, request, context):
+		return raftdb.GetResponse(code = 200, value = self.store[request.key])
+
+	def Put(self, request, context):
+		self.store[request.key] = request.value
+		return raftdb.PutResponse(code = 200)
 
 	def insertToLog(self, message):
 		pass
@@ -42,7 +42,7 @@ class Server(raftdb_grpc.ClientRequestServicer):
 def serve():
 	port = '50051'
 	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-	raftdb_grpc.add_ClientRequestServicer_to_server(Server(), server)
+	raftdb_grpc.add_ClientServicer_to_server(Server(), server)
 	server.add_insecure_port('[::]:' + port)
 	server.start()
 	server.wait_for_termination()

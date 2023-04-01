@@ -9,17 +9,16 @@ class Client:
 
 	def requestGet(self, key):
 		with grpc.insecure_channel(self.server_addr) as channel:
-			stub = raftdb_grpc.ClientRequestStub(channel)
-			request = raftdb.ClientReq(type=1, key=key)
-			response = stub.SendRequest(request)
+			stub = raftdb_grpc.ClientStub(channel)
+			request = raftdb.GetRequest(key=key)
+			response = stub.Get(request)
 			print(response.value)
 
 	def requestPut(self, key, value):
 		with grpc.insecure_channel(self.server_addr) as channel:
-			stub = raftdb_grpc.ClientRequestStub(channel)
-			request = raftdb.ClientReq(type=2, key=key, value=value)
-			response = stub.SendRequest(request)
-			print(response.value)
+			stub = raftdb_grpc.ClientStub(channel)
+			request = raftdb.PutRequest(key=key, value=value)
+			response = stub.Put(request)
 
 if __name__ == '__main__':
 	client = Client()
