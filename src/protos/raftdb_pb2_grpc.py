@@ -2,7 +2,7 @@
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
 
-import raftdb_pb2 as raftdb__pb2
+import protos.raftdb_pb2 as raftdb__pb2
 
 
 class ClientStub(object):
