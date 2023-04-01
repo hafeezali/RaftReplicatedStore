@@ -66,11 +66,11 @@ class VoteRequest(_message.Message):
     def __init__(self, term: _Optional[int] = ..., termIndex: _Optional[int] = ...) -> None: ...
 
 class VoteResponse(_message.Message):
-    __slots__ = ["bool", "term", "termIndex"]
-    BOOL_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ["success", "term", "termIndex"]
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
     TERMINDEX_FIELD_NUMBER: _ClassVar[int]
     TERM_FIELD_NUMBER: _ClassVar[int]
-    bool: int
+    success: bool
     term: int
     termIndex: int
-    def __init__(self, bool: _Optional[int] = ..., term: _Optional[int] = ..., termIndex: _Optional[int] = ...) -> None: ...
+    def __init__(self, success: bool = ..., term: _Optional[int] = ..., termIndex: _Optional[int] = ...) -> None: ...
