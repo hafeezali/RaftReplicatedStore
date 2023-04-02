@@ -40,7 +40,7 @@ class Election:
         self.election_timeout()
 
         # vote for ourself
-        self.submit_vote()
+        self.update_votes()
 
         # request votes from all replicas
         self.request_votes()
@@ -86,7 +86,7 @@ class Election:
             else:
                 time.sleep(wait_time)
         
-    def submit_vote(self):
+    def update_votes(self):
         self.num_votes += 1
         if self.num_votes >= self.majority:
             with self.__lock:
@@ -120,14 +120,15 @@ class Election:
                         commit = 0)
             start = time.time()
             response = stub.AppendEntries(request)
-            if response.code != 200 :
+            # if response.code != 200 :
+                # ??
                 ## Need heartbeat response from append entries, added term proto to be sent back
-                if self.term < response.term:
-                    self.status = config.STATE.FOLLOWER
-                    self.term = response.term
-                    self.election_timeout()
-            wait_time = time.time() - start
-            time.sleep((config.HB_TIME - wait_time) / 1000) ### CHECK
+                # if self.term < response.term:
+                #     self.status = config.STATE.FOLLOWER
+                #     self.term = response.term
+                #     self.election_timeout()
+            # wait_time = time.time() - start
+            # time.sleep((config.HB_TIME - wait_time) / 1000) ### CHECK
 
         
     def request_votes(self):
@@ -139,8 +140,11 @@ class Election:
             
     def send_vote_request(self, voter: str, term: int):
   
-        term_index = self.__store.termIndex
-        request = raftdb.VoteRequest(term=term, termIndex=term_index)
+        candidate_last_index = self.__store.termIndex
+
+        # get term of last item in log
+        candidate_term = self.__store.log[candidate_last_index].term
+        request = raftdb.VoteRequest(term=candidate_term, termIndex=candidate_last_index)
 
         while self.status == config.STATE.CANDIDATE and self.term == term:
 
@@ -152,7 +156,7 @@ class Election:
                     vote = vote_response['success']
                     # logger.debug(f'choice from {voter} is {choice}')
                     if vote == True and self.status == config.STATE.CANDIDATE:
-                        self.submit_vote()
+                        self.update_votes()
                     elif not vote:
                         voter_term = vote_response['term']
                         if voter_term > self.term:
@@ -162,7 +166,7 @@ class Election:
                     break
 
 
-    def choose_vote(self, candidate_term: int, candidate_term_index: int) -> bool:
+    def choose_vote(self, candidate_term: int, candidate_log_index: int) -> bool:
         '''
         Decide whether to vote for candidate or not on receiving request vote RPC.
        
@@ -173,12 +177,13 @@ class Election:
         Returns False otherwise
         '''
         self.reset_election_timeout()
-        my_term_index = self.__store.termIndex
+        voter_last_log_index = self.__store.termIndex
+        voter_last_term = self.__store.log[voter_last_log_index].term
 
-        if self.term < candidate_term or (self.term == candidate_term and my_term_index <= candidate_term_index): 
+        if voter_last_term < candidate_term or (voter_last_term == candidate_term and voter_last_log_index <= candidate_log_index): 
             self.reset_election_timeout()
             self.term = candidate_term
-            return True, self.term, my_term_index
+            return True, self.term, voter_last_log_index
         else:
-            return False, self.term, my_term_index
+            return False, self.term, voter_last_log_index
    
