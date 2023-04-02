@@ -22,10 +22,29 @@ python -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./src
 6. Need to implement a logger layer
 
 
-TODO:
+## TODO:
 Leader
 1. leader has to decide if an entry is committed and apply to its state machine
 2. once it commits, update last commit index to send in future rpcs
+
 Follower
-3. Once log is consistent with leader, check last commit index, and mark entries as committed
-4. Apply to state machine
+1. Once log is consistent with leader, check last commit index, and mark entries as committed
+2. Apply to state machine
+
+## State that has to be stored by each replica
+
+Log
+- Each entry must have: Command [Key, Value], Term, stored at a particular log index
+- Last committed entry index
+- last applied entry index
+
+Server details
+- server id
+- state [leader, follower, candidate]
+- who is the leader
+
+Configuration
+- How many machines in the system
+- list of peers and their addresses
+
+Database details
