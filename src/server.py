@@ -1,5 +1,5 @@
 from raft.election import elect
-from raft.consensus import appendEntry
+from raft.consensus import Consensus
 from concurrent import futures
 
 import grpc
@@ -19,6 +19,7 @@ class Server(raftdb_grpc.ClientServicer):
 		self.state = STATE['FOLLOWER']
 		self.log = list()
 		self.port = '50051'
+		self._consensus = Consensus(peers=peer_list)
 
 	def recover(self):
 		pass
@@ -28,7 +29,15 @@ class Server(raftdb_grpc.ClientServicer):
 
 	def Put(self, request, context):
 		self.store[request.key] = request.value
-		return raftdb.PutResponse(code = 200)
+		command = {
+			'key' : request.key,
+			'value' : request.value
+		}
+		if self._consensus.handlePut(command) == 'OK':
+			return raftdb.PutResponse(code = 200)
+		else :
+			#some error code
+			return raftdb.PutResponse(code = 200)
 
 	def insertToLog(self, message):
 		pass
