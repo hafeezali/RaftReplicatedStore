@@ -19,3 +19,4 @@ python -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./src
 	- termIndex : index for given term
 4. Server needs to handle redirection
 5. Reject/block client request when election in progress
+6. Need to implement a logger layer
