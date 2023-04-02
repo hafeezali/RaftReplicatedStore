@@ -23,10 +23,10 @@ class Consensus() :
 			for follower in self.__peers:
 				responses.append(
             			executor.submit(
-                		sendAppendEntry, follower = follower, command = command
+                		self.sendAppendEntry, follower = follower, command = command
             		)
 				)
-
+			
 			completed = concurrent.futures.as_completed(responses)
 			if len(completed) > len(self.__peers)/2 + 1 :
 				self.rocksdb.put(command.key, command.value)
@@ -38,37 +38,32 @@ class Consensus() :
 		with grpc.insecure_channel(follower) as channel:
 			stub = raftdb_grpc.RaftStub(channel)
 			term_index = self.__store.termIndex-1
-			request = raftdb.LogEntry(term=self.__store.log[term_index].term, termIndex=term_index,
-					Entry={'key' : command.key,'value' : command.value},lastCommitIndex=self.__store.lastCommitIndex, commit = 0)
+			request = raftdb.LogEntry(term=self.__store.log[term_index].term, termIndex=term_index,Entry={'key' : command.key,'value' : command.value, 'term' : self.__store.log[term_index+1].term},lastCommitIndex=self.__store.lastCommitIndex)
 			response = stub.AppendEntries(request)
-			while response.code != 1 :
+
+			while response.code != 200 :
 				term_index = term_index - 1
-				request = raftdb.LogEntry(term=self.__store.log[term_index].term, termIndex=term_index,
-					Entry={'key' : command.key,'value' : command.value},lastCommitIndex=self.__store.lastCommitIndex, commit = 0)
+				request = raftdb.LogEntry(term=self.__store.log[term_index].term, termIndex=term_index, Entry={'key' : self.__store.log[term_index+1].key,'value' : self.__store.log[term_index+1].value, 'term' : self.__store.log[term_index+1].term},lastCommitIndex=self.__store.lastCommitIndex)
 				response = stub.AppendEntries(request)
 
 			while term_index!= self.__store.termIndex:
 				term_index = term_index + 1
 				request = raftdb.LogEntry(term=self.__store.log[term_index].term, termIndex=term_index,
-					Entry={'key' : self.__store.log[term_index].key,'value' : self.__store.log[term_index].value},lastCommitIndex=self.__store.lastCommitIndex, commit= 1)
+					Entry={'key' : self.__store.log[term_index+1].key,'value' : self.__store.log[term_index+1].value, 'term' : self.__store.log[term_index+1].term},lastCommitIndex=self.__store.lastCommitIndex)
 				response = stub.AppendEntries(request)
-			print(response.value)
+			
 		
 
 			
 
 	def AppendEntry(self, request, context) :
-		if request.commit == 0 :
-			if request.term == self.__store.log[request.termIndex].term :
-				return raftdb.LogEntryResponse(code=200)
-			else :
-				return raftdb.LogEntryResponse(code='ERR')
-			
-		else :
+		if request.term == self.__store.log[request.termIndex].term :
 			self.__store.log.append({'key' : request.Entry.key,
 									'value' :request.Entry.value,
-									'term' : request.term})
+									'term' : request.Entry.term})	
 			return raftdb.LogEntryResponse(code=200)
+		else :
+				return raftdb.LogEntryResponse(code='ERR')
 
 
 
