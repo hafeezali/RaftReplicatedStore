@@ -29,6 +29,7 @@ class Consensus() :
             
             completed = concurrent.futures.as_completed(responses)
             if len(completed) > len(self.__peers)/2 + 1 :
+                # TODO: Put value in database
                 self.rocksdb.put(command.key, command.value)
                 return 'OK'
             

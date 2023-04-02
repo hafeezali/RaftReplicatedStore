@@ -26,6 +26,7 @@ python -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./src
 Leader
 1. leader has to decide if an entry is committed and apply to its state machine
 2. once it commits, update last commit index to send in future rpcs
+3. remove prev log index from proto and append entries
 
 Follower
 1. Once log is consistent with leader, check last commit index, and mark entries as committed
