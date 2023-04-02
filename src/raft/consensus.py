@@ -34,7 +34,6 @@ class Consensus() :
             
     
     def create_log_entry_request(self, log_index, command):
-        
         prev_term = -1
         if log_index != 0:
             prev_term = self.__store.log[log_index - 1].term,

@@ -20,3 +20,12 @@ python -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./src
 4. Server needs to handle redirection
 5. Reject/block client request when election in progress
 6. Need to implement a logger layer
+
+
+TODO:
+Leader
+1. leader has to decide if an entry is committed and apply to its state machine
+2. once it commits, update last commit index to send in future rpcs
+Follower
+3. Once log is consistent with leader, check last commit index, and mark entries as committed
+4. Apply to state machine
