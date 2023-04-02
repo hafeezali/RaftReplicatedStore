@@ -7,7 +7,7 @@ from raft.store import Store
 from raft.election import Election
 
 class Consensus() :
-    def __init__(self,peers: list):
+    def __init__(self, peers: list):
         #need to edit it 
         self.__store = Store()
         self.__peers = peers
@@ -33,23 +33,38 @@ class Consensus() :
                 return 'OK'
             
     
+    def create_log_entry_request(self, log_index, command):
+        
+        prev_term = -1
+        if log_index != 0:
+            prev_term = self.__store.log[log_index - 1].term,
+        
+        request = raftdb.LogEntry(
+            term = self.__store.log[log_index].term, 
+            logIndex = log_index,
+            Entry = {'key' : command.key,
+                    'value' : command.value
+                    },
+            prev_term = prev_term,
+            prev_log_index = log_index - 1,
+            lastCommitIndex = self.__store.lastCommitIndex)
+        return request         
 
     def sendAppendEntry(self, follower : str, command):
         with grpc.insecure_channel(follower) as channel:
             stub = raftdb_grpc.RaftStub(channel)
-            term_index = self.__store.logIndex - 1
-            request = raftdb.LogEntry(term=self.__store.log[term_index].term, logIndex=term_index,Entry={'key' : command.key,'value' : command.value, 'term' : self.__store.log[term_index+1].term},lastCommitIndex=self.__store.lastCommitIndex)
+            log_index = self.__store.logIndex
+            request = self.create_log_entry_request(log_index, command)
             response = stub.AppendEntries(request)
 
             while response.code != 200 :
-                term_index = term_index - 1
-                request = raftdb.LogEntry(term=self.__store.log[term_index].term, logIndex=term_index, Entry={'key' : self.__store.log[term_index+1].key,'value' : self.__store.log[term_index+1].value, 'term' : self.__store.log[term_index+1].term},lastCommitIndex=self.__store.lastCommitIndex)
+                log_index = log_index - 1
+                request = self.create_log_entry_request(log_index, command)
                 response = stub.AppendEntries(request)
 
-            while term_index!= self.__store.logIndex:
-                term_index = term_index + 1
-                request = raftdb.LogEntry(term=self.__store.log[term_index].term, logIndex=term_index,
-                    Entry={'key' : self.__store.log[term_index+1].key,'value' : self.__store.log[term_index+1].value, 'term' : self.__store.log[term_index+1].term},lastCommitIndex=self.__store.lastCommitIndex)
+            while log_index!= self.__store.logIndex:
+                log_index = log_index + 1
+                request = request = self.create_log_entry_request(log_index, command)
                 response = stub.AppendEntries(request)
             
         
@@ -57,12 +72,28 @@ class Consensus() :
             
 
     def AppendEntries(self, request, context) :
-        if request.term == self.__store.log[request.logIndex].term :
+        # If previous term and log index for request matches the last entry in log, append
+        # Else, return error. Leader will decrement next index for replica and retry
+
+        if request.prev_term == -1 and request.prev_log_index == -1:
+            # delete follower log if master log is empty
+            self.__store.log.clear()
+
             self.__store.log.append({'key' : request.Entry.key,
                                     'value' :request.Entry.value,
-                                    'term' : request.Entry.term})    
+                                    'term' : request.term})  
             return raftdb.LogEntryResponse(code=200)
+
+        elif request.prev_term == self.__store.log[self.__store.logIndex].term \
+                and request.prev_log_index == self.__store.logIndex:
+            
+            self.__store.log.append({'key' : request.Entry.key,
+                                    'value' :request.Entry.value,
+                                    'term' : request.term})    
+            return raftdb.LogEntryResponse(code=200)
+        
         elif request is not None and request.Entry is None:
+            # ack for heartbeat
             return raftdb.LogEntryResponse(code=200) 
         else:
             return raftdb.LogEntryResponse(code='ERR')

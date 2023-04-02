@@ -12,20 +12,20 @@ from raft.consensus import Consensus
 
 
 class Election:
-    def __init__(self, consensus: Consensus, store: Store, queue: Queue):
+    def __init__(self, replicas: list, store: Store, queue: Queue):
         self.timeout_thread = None
         self.status = config.STATE.FOLLOWER
         self.term = 0
         self.num_votes = 0
         self.store = store
-        self.__transport = consensus
+        self.replicas = replicas
         self.__lock = Lock()
         self.q = queue
         self.election_timeout()
 
     def begin_election(self):
         '''
-        once the election timeout has passed, this function starts the leader election
+        Once the election timeout has passed, this function starts the leader election
         '''
         # logger.info('starting election')
         self.term += 1
@@ -33,8 +33,7 @@ class Election:
         self.status = config.STATE.CANDIDATE
 
         # Calculate majority, TODO: update once transport layer is done
-        self.replicas = self.__transport.peers
-        self.majority = ((1 + len(self.replicas)) // 2) + 1 ##### NEED TO CHECK
+        self.majority = ((1 + len(self.replicas)) // 2) + 1 
         
         # Wait for election timeout
         self.election_timeout()
@@ -81,7 +80,7 @@ class Election:
         while self.status != config.STATE.LEADER:
             wait_time = self.election_time - time.time()
             if wait_time < 0:
-                if self.__transport.peers:
+                if self.replicas:
                     self.begin_election()
             else:
                 time.sleep(wait_time)
@@ -120,7 +119,7 @@ class Election:
                         commit = 0)
             start = time.time()
             response = stub.AppendEntries(request)
-            while response.code != 200 :
+            while response.code != 200:
                 # Need heartbeat response from append entries, added term proto to be sent back
                 response = stub.AppendEntries(request)
         
@@ -128,9 +127,8 @@ class Election:
             time.sleep((config.HB_TIME - wait_time) / 1000)
         
     def request_votes(self):
-        '''
-        Request votes from other nodes in the cluster.
-        '''
+        # Request votes from other nodes in the cluster.
+        
         for replica in self.replicas:
             Thread(target=self.send_vote_request, args=(replica, self.term)).start()
             
@@ -176,7 +174,8 @@ class Election:
         voter_last_log_index = self.__store.logIndex
         voter_last_term = self.__store.log[voter_last_log_index].term
 
-        if voter_last_term < candidate_term or (voter_last_term == candidate_term and voter_last_log_index <= candidate_log_index): 
+        if voter_last_term < candidate_term or \
+                (voter_last_term == candidate_term and voter_last_log_index <= candidate_log_index): 
             self.reset_election_timeout()
             self.term = candidate_term
             return True, self.term, voter_last_log_index
