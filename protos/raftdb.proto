@@ -43,6 +43,7 @@ message LogEntry {
 
 message LogEntryResponse {
 	int32 code = 1;
+	int32 term = 2;
 }
 
 message VoteRequest {

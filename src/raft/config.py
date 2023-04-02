@@ -10,14 +10,12 @@ STATE = {
 	'LEADER': 3	
 }
 
-LOW_TIMEOUT = int(getenv('LOW_TIMEOUT', 150))
-HIGH_TIMEOUT =  int(getenv('HIGH_TIMEOUT', 300))
+MIN_TIMEOUT = int(getenv('MIN_TIMEOUT', 150))
+MAX_TIMEOUT =  int(getenv('MAX_TIMEOUT', 300))
 
 REQUESTS_TIMEOUT = 50
 HB_TIME = int(getenv('HB_TIME', 50))
 MAX_LOG_WAIT = int(getenv('MAX_LOG_WAIT', 150))
-
-
 
 def chunks(l, n):
     n = max(1, n)
