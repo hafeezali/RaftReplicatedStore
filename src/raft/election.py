@@ -4,6 +4,8 @@ from queue import Queue
 from raft.config import STATE
 from raft.config import random_timeout
 from raft.config import HB_TIME
+from random import randrange
+import raft.config as config
 
 
 class Election:
@@ -18,7 +20,7 @@ class Election:
         self.q = queue
         self.election_timeout()
 
-    def start_election(self):
+    def begin_election(self):
         '''
         once the election timeout has passed, this function starts the leader election
         '''
@@ -26,16 +28,18 @@ class Election:
         self.term += 1
         self.num_votes = 0
         self.status = STATE.CANDIDATE
-        self.peers = self.__transport.peers
-        self.majority = ((1 + len(self.peers)) // 2) + 1 ##### NEED TO CHECK
+
+        # Calculate majority, TODO: update once transport layer is done
+        self.replicas = self.__transport.peers
+        self.majority = ((1 + len(self.replicas)) // 2) + 1 ##### NEED TO CHECK
         
         # Wait for election timeout
         self.election_timeout()
 
         # vote for ourself
-        self.increment_vote()
+        self.submit_vote()
 
-        # request votes from all peers
+        # request votes from all replicas
         self.request_votes()
 
     def election_timeout(self):
@@ -47,10 +51,16 @@ class Election:
             self.reset_election_timeout()
             if self.timeout_thread and self.timeout_thread.is_alive():
                 return
-            self.timeout_thread = Thread(target=self.timeout_loop)
+            self.timeout_thread = Thread(target=self.replica_loop)
             self.timeout_thread.start()
         except Exception as e:
             raise e
+        
+    def random_timeout():
+        '''
+        return random timeout number
+        '''
+        return randrange(config.LOW_TIMEOUT, config.HIGH_TIMEOUT) / 1000
     
     def reset_election_timeout(self):
         '''
@@ -58,7 +68,7 @@ class Election:
         '''
         self.election_time = time.time() + random_timeout()
 
-    def timeout_loop(self):
+    def replica_loop(self):
         '''
         Followers execute this loop, and wait for heartbeats from leader
         '''
@@ -66,11 +76,11 @@ class Election:
             wait_time = self.election_time - time.time()
             if wait_time < 0:
                 if self.__transport.peers:
-                    self.start_election()
+                    self.begin_election()
             else:
                 time.sleep(wait_time)
         
-    def increment_vote(self):
+    def submit_vote(self):
         self.num_votes += 1
         if self.num_votes >= self.majority:
             with self.__lock:
@@ -99,8 +109,8 @@ class Election:
         #         self.store.put(self.term, self.store.staged,
         #                        self.__transport, self.majority)
         # logger.info(f"I'm the leader of the pack for the term {self.term}")
-        # logger.debug('sending heartbeat to peers')
-        for peer in self.peers:
+        # logger.debug('sending heartbeat to other replicas')
+        for peer in self.replicas:
             Thread(target=self.append_entries, args=(peer,)).start()
         
     def append_entries(self, peer: str):
@@ -132,7 +142,7 @@ class Election:
         '''
         Request votes from other nodes in the cluster.
         '''
-        for peer in self.peers:
+        for peer in self.replicas:
             Thread(target=self.send_vote_request,
                    args=(peer, self.term)).start()
             
@@ -151,13 +161,17 @@ class Election:
             'candidate_term': term,
             'candidate_commit_id': self.store.commit_id
         }
+  
+        term_index = self.__store.termIndex - 1
+        request = raftdb.VoteRequest(term=self.__store.log[term_index].term, termIndex=term_index)
+
         while self.status == STATE.CANDIDATE and self.term == term:
             vote_reply = self.__transport.vote_request(voter, message)
             if vote_reply:
                 choice = vote_reply['choice']
                 # logger.debug(f'choice from {voter} is {choice}')
                 if choice and self.status == STATE.CANDIDATE:
-                    self.increment_vote()
+                    self.submit_vote()
                 elif not choice:
                     term = vote_reply['term']
                     if term > self.term:
@@ -181,6 +195,4 @@ class Election:
             return True, self.term
         else:
             return False, self.term
-
-    def elect():
-        pass    
+   

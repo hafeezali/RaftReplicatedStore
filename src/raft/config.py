@@ -1,5 +1,5 @@
 from os import getenv
-from random import randrange
+
 
 ELECTION_TIMEOUT = 10
 HEARTBEAT_TIMEOUT = 10
@@ -17,11 +17,7 @@ REQUESTS_TIMEOUT = 50
 HB_TIME = int(getenv('HB_TIME', 50))
 MAX_LOG_WAIT = int(getenv('MAX_LOG_WAIT', 150))
 
-def random_timeout():
-    '''
-    return random timeout number
-    '''
-    return randrange(LOW_TIMEOUT, HIGH_TIMEOUT) / 1000
+
 
 def chunks(l, n):
     n = max(1, n)
