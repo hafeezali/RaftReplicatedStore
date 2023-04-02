@@ -36,7 +36,7 @@ message LogEntry {
 	}
 
 	int32 term = 1;
-	int32 termIndex = 2;
+	int32 logIndex = 2;
 	int32 lastCommitIndex = 3;
 	Entry entry = 4;
 }
@@ -47,11 +47,11 @@ message LogEntryResponse {
 
 message VoteRequest {
 	int32 term = 1;
-	int32 termIndex = 2;
+	int32 logIndex = 2;
 }
 
 message VoteResponse {
 	bool success = 1;
 	int32 term = 2;
-	int32 termIndex = 3;
+	int32 logIndex = 3;
 }
