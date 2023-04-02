@@ -105,31 +105,27 @@ class Election:
         heartbeats to the follower nodes
         '''
         for replica in self.replicas:
-            Thread(target=self.sendAppendEntry, args=(replica,)).start()
+            Thread(target=self.sendHeartbeat, args=(replica,)).start()
 
         
-    def sendAppendEntry(self, follower):
+    def sendHeartbeat(self, follower):
         # To send heartbeats
         with grpc.insecure_channel(follower) as channel:
             stub = raftdb_grpc.RaftStub(channel)
-            term_index = self.__store.termIndex-1
+            term_index = self.__store.logIndex
             request = raftdb.LogEntry(
-                        term=self.__store.log[term_index].term, 
-                        termIndex=term_index,
+                        term=self.term, 
+                        logIndex=term_index,
                         Entry=None,lastCommitIndex=self.__store.lastCommitIndex, 
                         commit = 0)
             start = time.time()
             response = stub.AppendEntries(request)
-            # if response.code != 200 :
-                # ??
-                ## Need heartbeat response from append entries, added term proto to be sent back
-                # if self.term < response.term:
-                #     self.status = config.STATE.FOLLOWER
-                #     self.term = response.term
-                #     self.election_timeout()
-            # wait_time = time.time() - start
-            # time.sleep((config.HB_TIME - wait_time) / 1000) ### CHECK
-
+            while response.code != 200 :
+                # Need heartbeat response from append entries, added term proto to be sent back
+                response = stub.AppendEntries(request)
+        
+            wait_time = time.time() - start
+            time.sleep((config.HB_TIME - wait_time) / 1000)
         
     def request_votes(self):
         '''
@@ -140,11 +136,11 @@ class Election:
             
     def send_vote_request(self, voter: str, term: int):
   
-        candidate_last_index = self.__store.termIndex
+        candidate_last_index = self.__store.logIndex
 
         # get term of last item in log
         candidate_term = self.__store.log[candidate_last_index].term
-        request = raftdb.VoteRequest(term=candidate_term, termIndex=candidate_last_index)
+        request = raftdb.VoteRequest(term=candidate_term, logIndex=candidate_last_index)
 
         while self.status == config.STATE.CANDIDATE and self.term == term:
 
@@ -177,7 +173,7 @@ class Election:
         Returns False otherwise
         '''
         self.reset_election_timeout()
-        voter_last_log_index = self.__store.termIndex
+        voter_last_log_index = self.__store.logIndex
         voter_last_term = self.__store.log[voter_last_log_index].term
 
         if voter_last_term < candidate_term or (voter_last_term == candidate_term and voter_last_log_index <= candidate_log_index): 
