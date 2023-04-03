@@ -7,22 +7,27 @@ import random
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
-from raft.store import Store
+from store.database import Database
 from raft.consensus import Consensus
 from logs.log import Log
 
+# this class needs to implement Raft Service (probably Election Service)
 class Election:
-    def __init__(self, replicas: list, store: Store, queue: Queue, log: Log):
+
+    # What is queue and why is that needed? Is database needed? Isn't just log enough?
+    def __init__(self, replicas: list, store: Database, queue: Queue, log: Log):
         self.timeout_thread = None
         self.status = config.STATE.FOLLOWER
         self.term = 0
         self.num_votes = 0
         self.store = store
         self.replicas = replicas
+        # What is this lock used for? 
         self.__lock = Lock()
         self.q = queue
         self.election_timeout()
 
+    # What triggers an election when leader dies? Should there be a thread that keep track of heartbeats and server state and triggers an election accordingly?
     def begin_election(self):
         '''
         Once the election timeout has passed, this function starts the leader election
@@ -61,7 +66,7 @@ class Election:
         except Exception as e:
             raise e
         
-    def random_timeout():
+    def random_timeout(self):
         '''
         return random timeout number
         '''
@@ -88,8 +93,11 @@ class Election:
     def update_votes(self):
         self.num_votes += 1
         if self.num_votes >= self.majority:
+            # why is this lock even needed here? what is the significance? The election process is run by only one thread no?
             with self.__lock:
                 self.status = config.STATE.LEADER
+                # What is this queue for? Can't we just store it in some state which can be accessed by the server up top?
+                # Also current implementation doesnt have this up top
                 if self.q.empty():
                     self.q.put({'election': self})
                 else:
@@ -111,15 +119,17 @@ class Election:
         # To send heartbeats
         with grpc.insecure_channel(follower) as channel:
             stub = raftdb_grpc.RaftStub(channel)
-            term_index = self.__store.logIndex
+            log_index = self.__log.log_idx
             request = raftdb.LogEntry(
                         term=self.term, 
-                        logIndex=term_index,
-                        Entry=None,lastCommitIndex=self.__store.lastCommitIndex, 
+                        logIndex=log_index,
+                        Entry=None,
+                        lastCommitIndex=self.__log.last_commit_idx, 
                         commit = 0)
             start = time.time()
             response = stub.AppendEntries(request)
             while response.code != 200:
+                # In what scenario can we get a code != 200? Is there a timeout on these rpcs? What if the node is down? Due to membership change or just node crash for extended duration? 
                 # Need heartbeat response from append entries, added term proto to be sent back
                 response = stub.AppendEntries(request)
         
@@ -134,10 +144,12 @@ class Election:
             
     def send_vote_request(self, voter: str, term: int):
   
-        candidate_last_index = self.__store.logIndex
+        # Assumption is this idx wont increase when sending heartbeats right?
+        candidate_last_index = self.__log.log_idx
 
         # get term of last item in log
-        candidate_term = self.__store.log[candidate_last_index].term
+        # can just do log.term -- current term
+        candidate_term = self.__log.get(candidate_last_index).term
         request = raftdb.VoteRequest(term=candidate_term, logIndex=candidate_last_index)
 
         while self.status == config.STATE.CANDIDATE and self.term == term:
@@ -146,6 +158,7 @@ class Election:
                 stub = raftdb_grpc.RaftStub(channel)
                 vote_response = stub.RequestVote(request)
                 
+                # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?
                 if vote_response:
                     vote = vote_response['success']
                     # logger.debug(f'choice from {voter} is {choice}')
@@ -159,7 +172,7 @@ class Election:
                             self.term = voter_term
                     break
 
-
+# where is the RequestVode handler?
     def choose_vote(self, candidate_term: int, candidate_log_index: int) -> bool:
         '''
         Decide whether to vote for candidate or not on receiving request vote RPC.
@@ -170,13 +183,18 @@ class Election:
 
         Returns False otherwise
         '''
+        # what's with so many election timeouts here?
         self.reset_election_timeout()
-        voter_last_log_index = self.__store.logIndex
-        voter_last_term = self.__store.log[voter_last_log_index].term
+        voter_last_log_index = self.__log.logIndex
+        # can just get the term from log.term
+        voter_last_term = self.__log.get(voter_last_log_index).term
 
         if voter_last_term < candidate_term or \
                 (voter_last_term == candidate_term and voter_last_log_index <= candidate_log_index): 
             self.reset_election_timeout()
+            # this update should probably happen in the log layer
+            # Actually, why is it that we're updating term here? What is the exact reason? Perhaps can be used by consensus to decide whethere to accept entry or not but that can done in other ways. Is there any other reason? In an election, a node can vote for multiple leaders anyway right?
+            # Only one will get majority I think... No? 
             self.term = candidate_term
             return True, self.term, voter_last_log_index
         else:

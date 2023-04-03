@@ -1,7 +1,7 @@
 from os import path
 from collections import deque
 
-# must have some sort of locking I think? when updating index???
+# must have some sort of locking I think? when updating index across threads ???
 class Log:
 
 	def __init__(self, server_id, database):

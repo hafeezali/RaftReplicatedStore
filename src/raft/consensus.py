@@ -3,7 +3,7 @@ import random
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
-from raft.store import Store
+from store.database import Database
 from raft.election import Election
 from logs.log import Log
 
@@ -13,9 +13,7 @@ class Consensus() :
     def __init__(self, peers: list, store, log):
         self.__peers = peers
         # TODO: need to pass more params to Election
-        self.__election = Election(store=store, log=log)
-        # why is store needed in consensus?
-        self.__store = store
+        self.__election = Election(replicas=peers, store=store, log=log)
         self.__log = log
     
     # why are we calling it command instead of entry?
@@ -89,6 +87,7 @@ class Consensus() :
                                 'term' : request.term})  
             return raftdb.LogEntryResponse(code=200)
         # can be simplified to request.prev_term == self.__log.term no? Actually do we need to have current index as a separate global var? Where else is that used?
+        # What happens when the node is participating in an election and it receives an appendEntries rpc? Maybe this happens due to a network partition for heartbeat timeout period?? Guess this is handled because the node after casting a vote updates it's term? need to check this
         elif request.prev_term == self.__log.get(self.__log.log_idx).term \
                 and request.prev_log_index == self.__log.log_idx:
             
