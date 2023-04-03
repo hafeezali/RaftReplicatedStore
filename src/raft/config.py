@@ -1,9 +1,5 @@
 from os import getenv
 
-
-ELECTION_TIMEOUT = 10
-HEARTBEAT_TIMEOUT = 10
-
 STATE = {
 	'CANDIDATE': 1,
 	'FOLLOWER': 2,

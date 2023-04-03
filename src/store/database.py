@@ -8,9 +8,6 @@ import shelve
 class Database:
 
 	def __init__(self, type = 'memory', server_id):
-		self.commit_idx = 0
-		self.log = deque()
-
 		if type == 'memory':
 			self.db = MemoryStore()
 		else:

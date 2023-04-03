@@ -8,6 +8,7 @@ class Client:
 		self.server_addr = 'localhost:50051'
 
 	def requestGet(self, key):
+		# implement server update logic
 		with grpc.insecure_channel(self.server_addr) as channel:
 			stub = raftdb_grpc.ClientStub(channel)
 			request = raftdb.GetRequest(key=key)
@@ -15,6 +16,7 @@ class Client:
 			print(response.value)
 
 	def requestPut(self, key, value):
+		# implement server update logic
 		with grpc.insecure_channel(self.server_addr) as channel:
 			stub = raftdb_grpc.ClientStub(channel)
 			request = raftdb.PutRequest(key=key, value=value)

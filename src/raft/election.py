@@ -9,10 +9,10 @@ import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
 from raft.store import Store
 from raft.consensus import Consensus
-
+from logs.log import Log
 
 class Election:
-    def __init__(self, replicas: list, store: Store, queue: Queue):
+    def __init__(self, replicas: list, store: Store, queue: Queue, log: Log):
         self.timeout_thread = None
         self.status = config.STATE.FOLLOWER
         self.term = 0

@@ -1,6 +1,5 @@
 # RaftReplicatedStore
 
-
 ## Installation:
 
 python -m pip install grpcio
@@ -17,12 +16,13 @@ python -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./src
 3. Add documentation
 	- lastCommitIndex : gives position in log
 	- termIndex : index for given term
-4. Server needs to handle redirection
-5. Reject/block client request when election in progress
-6. Need to implement a logger layer
-
 
 ## TODO:
+
+1. Server needs to handle redirection
+2. Reject/block client request when election in progress
+3. Need to implement a logger layer
+
 Leader
 1. leader has to decide if an entry is committed and apply to its state machine
 2. once it commits, update last commit index to send in future rpcs

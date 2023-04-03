@@ -1,3 +1,4 @@
+# Make this guy implement an interface
 class MemoryStore:
 
 	def __init__(self):
