@@ -13,7 +13,7 @@ class Consensus() :
     def __init__(self, peers: list, store, log):
         self.__peers = peers
         # TODO: need to pass more params to Election
-        self.__election = Election(replicas=peers, store=store, log=log)
+        self.__election = Election(peers=peers, store=store, log=log)
         self.__log = log
     
     # why are we calling it command instead of entry?

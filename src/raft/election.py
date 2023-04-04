@@ -11,20 +11,26 @@ from store.database import Database
 from raft.consensus import Consensus
 from logs.log import Log
 
+
 # this class needs to implement Raft Service (probably Election Service)
-class Election:
+class Election(raftdb_grpc.RaftElectionService):
 
     # What is queue and why is that needed? Is database needed? Isn't just log enough?
-    def __init__(self, replicas: list, store: Database, queue: Queue, log: Log):
+    def __init__(self, peers: list, log: Log, serverId: int):
         self.timeout_thread = None
-        self.status = config.STATE.FOLLOWER
-        self.term = 0
+        # self.term = 0 -- moved to log
         self.num_votes = 0
-        self.store = store
-        self.replicas = replicas
+        self.peers = peers
+        self.serverId = serverId
+        self.leaderId = -1 # Will get updated when a leader sends a heartbeat --- IS THIS NEEDED??
         # What is this lock used for? 
-        self.__lock = Lock()
-        self.q = queue
+        # No need of this lock, must use lock from log
+        # self.__lock = Lock()
+
+        self.__log = log
+        with log.__lock:
+            self.__log.status = config.STATE.FOLLOWER
+
         self.election_timeout()
 
     # What triggers an election when leader dies? Should there be a thread that keep track of heartbeats and server state and triggers an election accordingly?
@@ -33,12 +39,14 @@ class Election:
         Once the election timeout has passed, this function starts the leader election
         '''
         # logger.info('starting election')
-        self.term += 1
+        with self.__log.__lock:
+            self.__log.term += 1
+            self.__log.status = config.STATE.CANDIDATE
         self.num_votes = 0
-        self.status = config.STATE.CANDIDATE
+        
 
         # Calculate majority, TODO: update once transport layer is done
-        self.majority = ((1 + len(self.replicas)) // 2) + 1 
+        self.majority = ((1 + len(self.peers)) // 2) + 1 
         
         # Wait for election timeout
         self.election_timeout()
@@ -46,7 +54,7 @@ class Election:
         # vote for ourself
         self.update_votes()
 
-        # request votes from all replicas
+        # request votes from all peers
         self.request_votes()
 
     def election_timeout(self):
@@ -60,7 +68,7 @@ class Election:
             if self.timeout_thread and self.timeout_thread.is_alive():
                 return
             
-            self.timeout_thread = Thread(target=self.replica_loop)
+            self.timeout_thread = Thread(target=self.follower_loop)
             self.timeout_thread.start()
 
         except Exception as e:
@@ -78,14 +86,14 @@ class Election:
         '''
         self.election_time = time.time() + self.random_timeout()
 
-    def replica_loop(self):
+    def follower_loop(self):
         '''
         Followers execute this loop, and wait for heartbeats from leader
         '''
-        while self.status != config.STATE.LEADER:
+        while self.__log.status != config.STATE.LEADER:
             wait_time = self.election_time - time.time()
             if wait_time < 0:
-                if self.replicas:
+                if self.peers:
                     self.begin_election()
             else:
                 time.sleep(wait_time)
@@ -94,16 +102,10 @@ class Election:
         self.num_votes += 1
         if self.num_votes >= self.majority:
             # why is this lock even needed here? what is the significance? The election process is run by only one thread no?
-            with self.__lock:
-                self.status = config.STATE.LEADER
-                # What is this queue for? Can't we just store it in some state which can be accessed by the server up top?
-                # Also current implementation doesnt have this up top
-                if self.q.empty():
-                    self.q.put({'election': self})
-                else:
-                    election = self.q.get()
-                    election.update({'election': self})
-                    self.q.put(election)
+            with self.__log.__lock:
+                self.__log.status = config.STATE.LEADER
+            
+            self.leaderId = self.serverId
             self.elected_leader()
 
     def elected_leader(self):
@@ -111,48 +113,100 @@ class Election:
         If this node is elected as the leader, start sending
         heartbeats to the follower nodes
         '''
-        for replica in self.replicas:
-            Thread(target=self.sendHeartbeat, args=(replica,)).start()
+        for peer in self.peers:
+            Thread(target=self.sendHeartbeat, args=(peer,)).start()
 
         
     def sendHeartbeat(self, follower):
         # To send heartbeats
         with grpc.insecure_channel(follower) as channel:
             stub = raftdb_grpc.RaftStub(channel)
-            log_index = self.__log.log_idx
-            request = raftdb.LogEntry(
-                        term=self.term, 
-                        logIndex=log_index,
-                        Entry=None,
-                        lastCommitIndex=self.__log.last_commit_idx, 
-                        commit = 0)
+            request = raftdb.Heartbeat(
+                term = self.__log.term,
+                serverId = self.serverId
+            )
             start = time.time()
-            response = stub.AppendEntries(request)
-            while response.code != 200:
+            term = self.__log.term
+            while self.__log.term == term and self.__log.status == config.STATE.LEADER:
+                response = stub.Heartbeat(request)
+                if response.code != config.RESPONSE_CODE_OK:
                 # In what scenario can we get a code != 200? Is there a timeout on these rpcs? What if the node is down? Due to membership change or just node crash for extended duration? 
                 # Need heartbeat response from append entries, added term proto to be sent back
-                response = stub.AppendEntries(request)
+                    if response.term > self.__log.term:
+                        # We are not the most up to date term, revert to follower
+                        with self.__log.__lock:
+                            self.__log.term = response.term
+                            self.__log.status = config.STATE.FOLLOWER
+
+                        # Our heartbeat was rejected, so update leader ID to current leader
+                        self.leaderId = response.leaderId
+                        break
+                    # else:
+                        # There is some other error??
+                        # For now it will just retry
+                else:
+                    # We got an OK response, sleep for sometime and then send heartbeat again
+                    wait_time = time.time() - start
+                    time.sleep((config.HB_TIME - wait_time) / 1000)
+
+
+    # Heartbeat RPC Handler
+    # Executed by follower
+    def Heartbeat(self, sender_term, sender_serverId):
+        '''
+        Check the term of the sender. If sender term is greater than ours,
+
+        if we are candidate or leader, immediately set our state to follower
+
+        If our term is less or equal (and we are not the leader), return 200
+        Else return 500, along with our term so leader will know there is a
+        higher term in the system.
+
+        '''
+        if self.__log.term < sender_term:
+            with self.__log.__lock:
+                if self.__log.status == config.STATE.CANDIDATE or \
+                    self.__log.status == config.STATE.LEADER:
+                    self.__log.status = config.STATE.FOLLOWER
+
+                    # Update our term to match sender term
+                    self.__log.term = sender_term
+
+            # Update leader ID so that we can redirect requests to the leader
+            self.leaderId = sender_serverId
+            return config.RESPONSE_CODE_OK, self.__log.term, self.leaderId
         
-            wait_time = time.time() - start
-            time.sleep((config.HB_TIME - wait_time) / 1000)
-        
+        elif self.__log.term == sender_term and self.__log.status != config.STATE.LEADER:
+            self.leaderId = sender_serverId
+            return config.RESPONSE_CODE_OK, self.__log.term, self.leaderId
+        else:
+            # return the leader ID we have to the peer sending heartbeat, so it can 
+            # update its own leader id since it will revert to follower.
+            return config.RESPONSE_CODE_REJECT, self.__log.term, self.leaderId
+
+
     def request_votes(self):
         # Request votes from other nodes in the cluster.
         
-        for replica in self.replicas:
-            Thread(target=self.send_vote_request, args=(replica, self.term)).start()
+        for peer in self.peers:
+            Thread(target=self.send_vote_request, args=(peer, self.__log.term)).start()
             
     def send_vote_request(self, voter: str, term: int):
   
         # Assumption is this idx wont increase when sending heartbeats right?
-        candidate_last_index = self.__log.log_idx
+        candidate_last_log_index = self.__log.log_idx
+        candidate_term = self.__log.term
 
         # get term of last item in log
-        # can just do log.term -- current term
-        candidate_term = self.__log.get(candidate_last_index).term
-        request = raftdb.VoteRequest(term=candidate_term, logIndex=candidate_last_index)
+        # can just do log.term -- current term -- different from last log term
+        candidate_last_log_term = self.__log.get(candidate_last_log_index).term
 
-        while self.status == config.STATE.CANDIDATE and self.term == term:
+        request = raftdb.VoteRequest(term=candidate_term, 
+                                     lastLogTerm=candidate_last_log_term,
+                                     lastLogIndex=candidate_last_log_index,
+                                     candidateId=self.serverId)
+
+        while self.__log.status == config.STATE.CANDIDATE and self.__log.term == candidate_term:
 
             with grpc.insecure_channel(voter) as channel:
                 stub = raftdb_grpc.RaftStub(channel)
@@ -160,43 +214,84 @@ class Election:
                 
                 # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?
                 if vote_response:
-                    vote = vote_response['success']
-                    # logger.debug(f'choice from {voter} is {choice}')
-                    if vote == True and self.status == config.STATE.CANDIDATE:
+                    vote = vote_response.success
+                    if vote == True and self.__log.status == config.STATE.CANDIDATE:
                         self.update_votes()
                     elif not vote:
-                        voter_term = vote_response['term']
-                        if voter_term > self.term:
-                            self.status = config.STATE.FOLLOWER
-                            ### Update self term?
-                            self.term = voter_term
+                        voter_term = vote_response.term
+                        if voter_term > self.__log.term:
+                            with self.__log.__lock:
+                                self.__log.status = config.STATE.FOLLOWER
+                                ### Update self term? - Yes
+                                self.__log.term = voter_term
                     break
 
-# where is the RequestVode handler?
-    def choose_vote(self, candidate_term: int, candidate_log_index: int) -> bool:
+    # where is the RequestVode handler?
+    # RPC Request Vote Handler
+    def RequestVote(self, candidate_term: int, candidate_last_log_term: int,
+                    candidate_last_log_index: int, candidate_Id: int):
         '''
-        Decide whether to vote for candidate or not on receiving request vote RPC.
-       
-        Returns True if current node's term is less than candidate term 
-        OR
-        if current node's term is same as candidate term and has fewer or equal entries in log
+        # Decide whether to vote for candidate or not on receiving request vote RPC.
 
-        Returns False otherwise
+        If candidateCurrentTerm > voterCurrentTerm, set voterCurrentTerm ← candidateCurrentTerm
+        (step down if leader or candidate)
+        If candidateCurrentTerm == voterCurrentTerm, votedFor is null or candidate_Id,
+        and candidate's log is at least as complete as local log,
+        grant vote and reset election timeout
+        else reject
+        to decide if log is more complete
+
+        if voterLastLogTerm < candidateLastLogTerm : OK
+        elif: voterLastLogTerm == candidateLastLogTerm and voterLastLogIndex <= candidateLastLogIndex: OK
+        else: reject vote
+
         '''
         # what's with so many election timeouts here?
+        # Reset election timeout so that the follower does not immediately start a new election
         self.reset_election_timeout()
+        voter_term = self.__log.term
         voter_last_log_index = self.__log.logIndex
-        # can just get the term from log.term
-        voter_last_term = self.__log.get(voter_last_log_index).term
+        # can just get the term from log.term -- not the same!!
+        voter_last_log_term = self.__log.get(voter_last_log_index).term
 
-        if voter_last_term < candidate_term or \
-                (voter_last_term == candidate_term and voter_last_log_index <= candidate_log_index): 
-            self.reset_election_timeout()
-            # this update should probably happen in the log layer
-            # Actually, why is it that we're updating term here? What is the exact reason? Perhaps can be used by consensus to decide whethere to accept entry or not but that can done in other ways. Is there any other reason? In an election, a node can vote for multiple leaders anyway right?
-            # Only one will get majority I think... No? 
-            self.term = candidate_term
-            return True, self.term, voter_last_log_index
+        if candidate_term > voter_term:
+            with self.__log.__lock:
+                self.__log.term = candidate_term
+
+                # Step down if we are the leader or candidate
+                if self.__log.status == config.STATE.CANDIDATE or \
+                    self.__log.status == config.STATE.LEADER:
+                    self.__log.status = config.STATE.FOLLOWER
+            return True, candidate_term
+
+        elif candidate_term < voter_term:
+            # Reject request vote
+            return False, self.__log.term
+        
         else:
-            return False, self.term, voter_last_log_index
+            # voter term and candidate term are equal
+            # TODO: Wherever we update term, set voted for to -1 or something
+            if self.__log.voted_for_Id > 0 and self.__log.voted_for_Id != candidate_Id:
+                # already voted for someone else
+                return False, self.__log.term
+            
+            else: 
+                # We have not voted for anyone, or we have already voted for this candidate
+                # Check log to see if candidate's is more complete than ours
+
+                if voter_last_log_term < candidate_last_log_term or \
+                    (voter_last_log_term == candidate_last_log_term and voter_last_log_index <= candidate_last_log_index): 
+                    self.reset_election_timeout()
+                    # this update should probably happen in the log layer
+                    # Actually, why is it that we're updating term here? What is the exact reason? Perhaps can be used by consensus to decide whethere to accept entry or not but that can done in other ways. Is there any other reason? In an election, a node can vote for multiple leaders anyway right?
+                    # Only one will get majority I think... No? 
+  
+                    with self.__log.__lock:
+                        self.__log.term = candidate_term # Technically not needed since terms are equal
+                        self.__log.voted_for_Id = candidate_Id
+
+                    return True, self.__log.term
+                
+                else:
+                    return False, self.__log.term
    
