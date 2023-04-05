@@ -17,10 +17,15 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         # TODO: need to pass more params to Election
         self.__election = Election(peers=peers, store=store, log=log)
         self.__log = log
+        self.counter = dict()
+        self.commit_done = dict()
        
     
     # why are we calling it command instead of entry?
     def handlePut(self,entry):
+        key = (entry.clientid, entry.sequence_number)
+        self.counter[key] = 0
+        self.waitForCommit[key] = 0
     # case where the leader fails, checks if already applied to the state machine
         last_committed_entry = self.__log.lastCommittedEntry(entry.clientid)
 
@@ -39,22 +44,32 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             for follower in self.__peers:
                 responses.append(
                         executor.submit(
-                        self.broadcastEntry, follower = follower, entry = entry
+                        self.broadcastEntry, follower = follower, entry = entry, log_index_to_commit = log_index_to_commit
                     )
                 )
+            responses.append(executor.submit(
+                        self.waitForCommit, client_request = key, log_index_to_commit = log_index_to_commit
+                )
+            )    
             # when do the executors start? on submit? If so, the append entries aren't sent in parallel
-            completed = concurrent.futures.as_completed(responses)
-            if len(completed) > len(self.__peers)/2 + 1 :
-                # TODO: Put value in database - are we supposed to update state here? Or just add it as ready for commit in log?
-                # What happens when we get two consecutive updates but the latter gets committed but the former isn't? 
-                # 1, 2 => 1 doesnt get consensus, but 2 gets. Do we mark 2 as committed before retrying 1? Do we even retry 1 or just remove that from log? Can we remove from log? but actually why wont it ever get accepted eventually if future ones are getting accepted.... i guess we're safe
-                self.__log.commit(log_index_to_commit)
-                # sleep because this entry needs to be pushed to database as well - this should be handled in commit function itself
-                while self.__log.is_applied(log_index_to_commit) :
-                    print("waiting to go to db")
-                # self.rocksdb.put(command.key, command.value)
-                return 'OK'
+            
+            while self.waitForCommit[key] != 1 :
+                print("waiting for commit") 
+
+            self.commit_done.pop(key)
+            return 'OK'
     
+    def waitForCommit(self, client_request, log_index_to_commit) :
+        majority = len(self.__peers)/2 + 1
+        while self.counter[client_request]!= majority :
+            print("waiting for majority")
+
+        self.__log.commit(log_index_to_commit)
+        while self.__log.is_applied(log_index_to_commit) :
+              print("waiting to go to db")
+
+        self.waitForCommit[client_request] = 1 
+
     def create_log_entry_request(self, prev_log_index, entry):
         prev_term = -1
         if prev_log_index != -1:
@@ -63,18 +78,15 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         request = raftdb.LogEntry(
             term = self.__log.get_term(), 
             logIndex = prev_log_index + 1,
-            Entry = {'key' : entry.key,
-                    'value' : entry.value,
-                    'clientid' : entry.clientid,
-                    'sequence_number' : entry.sequence_number
-                    },
+            Entry = entry,
             prev_term = prev_term,
             prev_log_index = prev_log_index,
-            lastCommitIndex = self.__log.lastCommitIndex)
+            # don't know what is this
+            lastCommitIndex = self.__log.get_last_commit_index())
         return request         
 
     # Proably wanna rename this to correct_follower_log and broadcast entry. And maybe split into two methods?
-    def broadcastEntry(self, follower : str, entry):
+    def broadcastEntry(self, follower : str, entry, log_index_to_commit):
         with grpc.insecure_channel(follower) as channel:
             stub = raftdb_grpc.RaftStub(channel)
             prev_log_index = self.__log.get_log_idx() - 1
@@ -91,11 +103,15 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                     request = self.create_log_entry_request(prev_log_index, entry)
                     response = stub.AppendEntries(request)
 
-                while prev_log_index < self.__log.get_log_idx() - 1:
+                while prev_log_index < log_index_to_commit - 1:
                     prev_log_index = prev_log_index + 1
                     request = request = self.create_log_entry_request(prev_log_index, entry)
                     response = stub.AppendEntries(request)
-	
+	        
+            key = (entry.clientid, entry.sequence_number)
+            self.counter[key] += 1
+            if self.counter[key] == len(self.__peers) :
+                self.counter.pop(key)
             
 
     def AppendEntries(self, request, context):
@@ -118,15 +134,14 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         # can be simplified to request.prev_term == self.__log.term no? Actually do we need to have current index as a separate global var? Where else is that used?
         # What happens when the node is participating in an election and it receives an appendEntries rpc? Maybe this happens due to a network partition for heartbeat timeout period?? Guess this is handled because the node after casting a vote updates it's term? need to check this
         # random bs above 
-        elif request.prev_term == self.__log.get(self.__log.log_idx).term \
-                and request.prev_log_index == self.__log.log_idx:
+        elif self.log.get_log_idx() >= request.prev_log_index and self.log.get(request.prev_log_index).term == request.prev_term : 
             value = {'key' : request.Entry.key,
                                 'value' :request.Entry.value,
                                 'term' : request.term,
                                 'clientid': request.Entry.clientid,
                                 'sequence_number' : request.Entry.sequence_number}
             self.__log.insert_at(self.__log.log_idx, value) 
-            self.__log.commit(request.lastCommitIndex)   
+            self.__log.commit_upto(request.lastCommitIndex)   
             return raftdb.LogEntryResponse(code=200, term = self.__log.get_term()) 
         else:
             return raftdb.LogEntryResponse(code=500, term = self.__log.get_term())
