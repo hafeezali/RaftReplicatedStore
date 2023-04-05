@@ -19,7 +19,7 @@ class Log:
 		self.log_idx = 0
 		self.last_applied_idx = 0
 		self.term = 0
-		self.status = STATE.FOLLOWER
+		self.status = STATE['FOLLOWER']
 		self.voted_for = {
 			'term': 0
 			'server_id': None
