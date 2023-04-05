@@ -7,6 +7,7 @@ from store.database import Database
 from raft.election import Election
 from logs.log import Log
 import raft.config as config
+from threading import Lock, Thread
 
 # Shouldn't this be implementing RaftServicer? Probably have to split that stupid shit RaftService to ConsensusService and ElectionService
 # change this in protos -> todo
@@ -17,21 +18,24 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         # TODO: need to pass more params to Election
         self.__election = Election(peers=peers, store=store, log=log)
         self.__log = log
+        self.lock = Lock()
         self.counter = dict()
         self.commit_done = dict()
        
     
     # why are we calling it command instead of entry?
     def handlePut(self,entry):
-        key = (entry.clientid, entry.sequence_number)
-        self.counter[key] = 0
-        self.waitForCommit[key] = 0
+        
     # case where the leader fails, checks if already applied to the state machine
         last_committed_entry = self.__log.lastCommittedEntry(entry.clientid)
 
         if last_committed_entry!= -1 and last_committed_entry.sequence_number == entry.sequence_number:
             return 'OK'
 
+        key = (entry.clientid, entry.sequence_number)
+        with self.lock :
+            self.counter[key] = 0
+            self.commit_done[key] = 0
         # probably get the index in the log when appending to use when committing later
         
         log_index_to_commit = self.__log.append({'key' : entry.key,
@@ -47,28 +51,18 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                         self.broadcastEntry, follower = follower, entry = entry, log_index_to_commit = log_index_to_commit
                     )
                 )
-            responses.append(executor.submit(
-                        self.waitForCommit, client_request = key, log_index_to_commit = log_index_to_commit
-                )
-            )    
+              
             # when do the executors start? on submit? If so, the append entries aren't sent in parallel
             
-            while self.waitForCommit[key] != 1 :
+            while self.commit_done[key] != 1 :
                 print("waiting for commit") 
 
             self.commit_done.pop(key)
-            return 'OK'
-    
-    def waitForCommit(self, client_request, log_index_to_commit) :
-        majority = len(self.__peers)/2 + 1
-        while self.counter[client_request]!= majority :
-            print("waiting for majority")
-
-        self.__log.commit(log_index_to_commit)
-        while self.__log.is_applied(log_index_to_commit) :
+            self.__log.commit(log_index_to_commit)
+            while self.__log.is_applied(log_index_to_commit) :
               print("waiting to go to db")
 
-        self.waitForCommit[client_request] = 1 
+            return 'OK'
 
     def create_log_entry_request(self, prev_log_index, entry):
         prev_term = -1
@@ -81,7 +75,6 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             Entry = entry,
             prev_term = prev_term,
             prev_log_index = prev_log_index,
-            # don't know what is this
             lastCommitIndex = self.__log.get_last_commit_index())
         return request         
 
@@ -109,9 +102,13 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                     response = stub.AppendEntries(request)
 	        
             key = (entry.clientid, entry.sequence_number)
-            self.counter[key] += 1
-            if self.counter[key] == len(self.__peers) :
-                self.counter.pop(key)
+            majority = len(self.__peers)/2 + 1
+            with self.lock :
+                self.counter[key] += 1
+                if self.counter[key] >= majority and key in self.commit_done:
+                    self.commit_done[key] = 1
+                if self.counter[key] == len(self.__peers) :
+                    self.counter.pop(key)
             
 
     def AppendEntries(self, request, context):
