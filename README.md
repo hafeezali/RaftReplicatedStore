@@ -49,3 +49,7 @@ Configuration
 - list of peers and their addresses
 
 Database details
+
+
+
+Add pics of protos and algos from the slides here
