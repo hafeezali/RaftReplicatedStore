@@ -27,12 +27,9 @@ class Server(raftdb_grpc.ClientServicer):
 	def Put(self, request, context):
 		# Implement leader check logic
 		# What happens when we dont get majority? Retry or fail? -- Im guessing fail and respond to client
-		command = {
-			'key' : request.key,
-			'value' : request.value
-		}
 		# can i not just directly pass request to command?
-		if self.consensus.handlePut(command) == 'OK':
+		# now the request also includes client id and sequence number
+		if self.consensus.handlePut(request) == 'OK':
 			return raftdb.PutResponse(code = 200)
 		else :
 			# add more appropriate error message
