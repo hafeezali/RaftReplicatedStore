@@ -49,7 +49,8 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                 # 1, 2 => 1 doesnt get consensus, but 2 gets. Do we mark 2 as committed before retrying 1? Do we even retry 1 or just remove that from log? Can we remove from log? but actually why wont it ever get accepted eventually if future ones are getting accepted.... i guess we're safe
                 self.__log.commit(log_index_to_commit)
                 # sleep because this entry needs to be pushed to database as well - this should be handled in commit function itself
-
+                while self.__log.is_applied(log_index_to_commit) :
+                    print("waiting to go to db")
                 # self.rocksdb.put(command.key, command.value)
                 return 'OK'
     
@@ -80,9 +81,8 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             response = stub.AppendEntries(request)
             
             if response.code == 500 and response.term > self.__log.term :
-                with self.__log.lock :
-                    self.__log.status = config.STATE.CANDIDATE
-                    self.__log.term = response.term
+                self.__log.update_status(config.STATE.CANDIDATE)
+                self.__log.update_term(response.term)
 
             else :
                 while response.code != 200 :
@@ -119,12 +119,12 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         # random bs above 
         elif request.prev_term == self.__log.get(self.__log.log_idx).term \
                 and request.prev_log_index == self.__log.log_idx:
-            
-            self.__log.append({'key' : request.Entry.key,
+            value = {'key' : request.Entry.key,
                                 'value' :request.Entry.value,
                                 'term' : request.term,
                                 'clientid': request.Entry.clientid,
-                                'sequence_number' : request.Entry.sequence_number}) 
+                                'sequence_number' : request.Entry.sequence_number}
+            self.__log.replace_at(self.__log.log_idx, value) 
             self.__log.commit(request.lastCommitIndex)   
             return raftdb.LogEntryResponse(code=200, term = self.__log.term) 
         else:
