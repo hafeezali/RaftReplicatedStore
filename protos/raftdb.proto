@@ -10,6 +10,10 @@ service RaftElectionService {
 	rpc RequestVote (VoteRequest) returns (VoteResponse) {}
 }
 
+service Consensus {
+	rpc AppendEntries (LogEntry) returns (LogEntryResponse) {}
+}
+
 message GetRequest {
 	int32 key = 1;
 }
@@ -17,6 +21,8 @@ message GetRequest {
 message PutRequest {
 	int32 key = 1;
 	int32 value = 2;
+	int32 clientid = 3;
+	int32 sequence_number = 4;
 }
 
 message GetResponse {
