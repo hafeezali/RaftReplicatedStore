@@ -54,6 +54,9 @@ class Log:
 		with self.lock:
 			self.term = term
 
+	def commit(self, index):
+		pass
+
 	def commit_upto(self, index):
 		with self.lock:
 			if self.last_commit_idx < index:

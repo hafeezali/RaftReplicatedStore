@@ -22,9 +22,9 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
     # why are we calling it command instead of entry?
     def handlePut(self,entry):
     # case where the leader fails, checks if already applied to the state machine
-        last_committed_entry = self.__log.lastCommittedEntry(entry.clientid)
+        last_committed_entry = self.__log.get_last_committed_sequence_for(entry.clientid)
 
-        if last_committed_entry!= -1 and last_committed_entry.sequence_number == entry.sequence_number:
+        if last_committed_entry != None and last_committed_entry.sequence_number == entry.sequence_number:
             return 'OK'
 
         # probably get the index in the log when appending to use when committing later
@@ -52,6 +52,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                 # sleep because this entry needs to be pushed to database as well - this should be handled in commit function itself
                 while self.__log.is_applied(log_index_to_commit) :
                     print("waiting to go to db")
+                    time.sleep(10)
                 # self.rocksdb.put(command.key, command.value)
                 return 'OK'
     
