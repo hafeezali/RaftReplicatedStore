@@ -73,11 +73,5 @@ if __name__ == '__main__':
     # server_id = 'server_1'
     # client_port = '50051'
     # raft_port = '50052'
-
-    server_id = os.getenv('SERVERID')
-    print(f"Starting Server {server_id}")
-    
-    peer_list = peer_list=os.getenv('PEERS').split(',')
-    server = Server(type=os.getenv('TYPE'), server_id=server_id, peer_list=peer_list)
-    
+    server = Server(type=os.getenv('TYPE').replace("'",""), server_id = os.getenv('SERVERID'),peer_list=os.getenv('PEERS').split(','))
     serve(server)

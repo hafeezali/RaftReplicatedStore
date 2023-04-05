@@ -64,9 +64,10 @@ class Log:
 		self.log_idx = -1
 		self.last_applied_idx = -1
 		self.term = 0
+
 		self.status = STATE['FOLLOWER']
 		self.voted_for = {
-			'term': -1,
+			'term': 0,
 			'server_id': None
 		}
 		self.leader_id = None
@@ -217,7 +218,7 @@ class Log:
 		self.logger.info("Commit done")
 
 	def get_log_idx(self):
-		# self.logger.info("Get log idx")
+		self.logger.info("Get log idx")
 
 		with self.lock:
 			return self.log_idx
@@ -228,7 +229,7 @@ class Log:
 			return self.last_commit_idx
 
 	def get_term(self):
-		# self.logger.info("Get term")
+		self.logger.info("Get term")
 
 		with self.lock:
 			return self.term
@@ -329,7 +330,7 @@ class Log:
 		return index <= self.last_applied_idx
 
 	def get_leader(self):
-		# self.logger.info("Get leader")
+		self.logger.info("Get leader")
 
 		with self.lock:
 			return self.leader_id
@@ -353,7 +354,7 @@ class Log:
 		self.logger.info("Update status done")
 
 	def get_status(self):
-		# self.logger.info("Get status")
+		self.logger.info("Get status")
 
 		return self.status
 	
@@ -365,11 +366,11 @@ class Log:
 			self.status = STATE['CANDIDATE']
 		self.config_change['status'] = True
 		self.config_change['term'] = True
-		
+
 		self.logger.info("Set self candidate done")		
 
 	def set_self_leader(self):
-		self.logger.info("Set self leader - wooooooooooooooohoooooooooooooooooooo")
+		self.logger.info("Set self leader")
 
 		with self.lock:
 			self.status = STATE['LEADER']
@@ -380,7 +381,8 @@ class Log:
 		self.logger.info("Set self leader done")
 
 	def revert_to_follower(self, new_term, new_leader_id):
-		
+		self.logger.info("Revert to follower")
+
 		with self.lock:
 			if self.status == STATE['CANDIDATE'] or self.status == STATE['LEADER']:
 				self.logger.info(f'Reverting to follower from {self.status}')
@@ -390,13 +392,12 @@ class Log:
 				self.logger.info(f'Updating term from {self.term} to {new_term}')
 			if self.leader_id != new_leader_id:
 				self.logger.info(f'Updating leader id from {self.leader_id} to {new_leader_id}')
-	
 			self.term = new_term
 			self.leader_id = new_leader_id
 
-		self.config_change['status'] = True
-		self.config_change['leader_id'] = True
-		self.config_change['term'] = True
+			self.config_change['status'] = True
+			self.config_change['leader_id'] = True
+			self.config_change['term'] = True
 
 		self.logger.info("Revert to follower done")
 
@@ -449,4 +450,3 @@ class Log:
 		self.logger.info("last_applied_idx: " + str(self.last_applied_idx))
 		self.logger.info("log_idx: " + str(self.log_idx))
 		self.logger.info("term: " + str(self.term))
-
