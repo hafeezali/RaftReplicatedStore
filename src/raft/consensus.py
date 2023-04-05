@@ -55,11 +55,13 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             # when do the executors start? on submit? If so, the append entries aren't sent in parallel
             
             while self.commit_done[key] != 1 :
+                time.sleep(100)
                 print("waiting for commit") 
 
             self.commit_done.pop(key)
             self.__log.commit(log_index_to_commit)
             while self.__log.is_applied(log_index_to_commit) :
+                time.sleep(100)
               print("waiting to go to db")
 
             return 'OK'
@@ -82,7 +84,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
     def broadcastEntry(self, follower : str, entry, log_index_to_commit):
         with grpc.insecure_channel(follower) as channel:
             stub = raftdb_grpc.RaftStub(channel)
-            prev_log_index = self.__log.get_log_idx() - 1
+            prev_log_index = log_index_to_commit - 1
             request = self.create_log_entry_request(prev_log_index, entry)
             response = stub.AppendEntries(request)
             
