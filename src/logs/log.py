@@ -1,34 +1,104 @@
-from os import path
-from collections import deque
+from os import path, getenv, makedirs
+from threading import Lock, Thread
 
-# must have some sort of locking I think? when updating index across threads ???
+import time
+import shelve
+
+from config import STATE
+
 class Log:
 
 	def __init__(self, server_id, database):
 		backup_name = server_id + '.log'
 		self.backup_path = path.join('backup', backup_name)
-		self.queue = deque()
+		self.database = database
+
+		# persistent configs
+		self.log = list()
 		self.last_commit_idx = 0
 		self.log_idx = 0
 		self.last_applied_idx = 0
 		self.term = 0
-		self.database = database
+		self.status = STATE['FOLLOWER']
+		self.voted_for = {
+			'term': 0
+			'server_id': None
+		}
+		self.leader_id = None
+		self.last_applied_command_per_client = dict()
+		
+		self.lock = Lock()
+		
 		recover()
+
+		Thread(target=self.apply).start()
 
 	def recover(self):
 		pass
 
+	def flush(self, index):
+		pass
+
+	def get_log_idx(self):
+		with self.lock:
+			return self.log_idx
+
+	def get_term(self):
+		with self.lock:
+			return self.term
+
+	def update_term(self, term):
+		with self.lock:
+			self.term = term
+
 	def append(self, entry):
-		pass
+		with self.lock:
+			self.list.append(entry)
+			self.log_idx += 1
+			return self.log_idx
 
-	def commit(self, index):
-		pass
+	def commit_upto(self, index):
+		with self.lock:
+			if self.last_commit_idx < index:
+				self.last_commit_idx = index
 
-	def apply(self, index):
-		pass
+	# Still think about string consistency. Can we apply to db, not respond to client who wrote but respond to clients who are reading with newer value? Is that still considered strongly consistent?
+	def apply(self):
+		while True:
+			c_idx = self.last_commit_idx
+			idx = self.last_applied_idx + 1
+			while idx < c_idx: 
+				flush_res = flush(idx)
+				if flush_res:
+					entry = self.get(idx)
+					self.database.put(entry.key, entry.value)
+					idx = idx + 1
+					self.last_applied_idx = self.last_applied_idx + 1
+					self.last_applied_command_per_client.update({entry.client_id, idx})
+				else:
+					break
+			time.sleep(100)
 
 	def get(self, index):
-		pass
+		return self.log.get(index)
 
-	def clear(self):
-		pass
+	def replace_at(self, index, entry):
+		self.log[index] = entry
+
+	def is_applied(self, index):
+		return index <= self.last_applied_idx
+
+	def get_leader(self):
+		with self.lock:
+			return self.leader_id
+
+	def update_leader(self, leader):
+		with self.lock:
+			self.leader_id = leader
+
+	def update_status(self, status):
+		with self.lock:
+			self.status = status
+
+	def get_status(seld):
+		return self.status
