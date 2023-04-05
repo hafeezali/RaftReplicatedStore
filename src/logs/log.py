@@ -4,12 +4,13 @@ from threading import Lock, Thread
 import time
 import shelve
 
-from config import STATE
+from raft.config import STATE
 
 class Log:
 
 	def __init__(self, server_id, database):
 		backup_name = server_id + '.log'
+		self.server_id = server_id
 		self.backup_path = path.join('backup', backup_name)
 		self.database = database
 
@@ -21,7 +22,7 @@ class Log:
 		self.term = 0
 		self.status = STATE['FOLLOWER']
 		self.voted_for = {
-			'term': 0
+			'term': 0,
 			'server_id': None
 		}
 		self.leader_id = None
@@ -29,7 +30,7 @@ class Log:
 		
 		self.lock = Lock()
 		
-		recover()
+		self.recover()
 
 		Thread(target=self.apply).start()
 
@@ -64,7 +65,7 @@ class Log:
 			c_idx = self.last_commit_idx
 			idx = self.last_applied_idx + 1
 			while idx < c_idx: 
-				flush_res = flush(idx)
+				flush_res = self.flush(idx)
 				if flush_res:
 					entry = self.get(idx)
 					self.database.put(entry.key, entry.value)
@@ -105,7 +106,34 @@ class Log:
 
 	def get_status(self):
 		return self.status
+	
+	def set_self_candidate(self):
+		with self.lock:
+			self.term += 1
+			self.status = STATE['CANDIDATE']
 
+	def set_self_leader(self):
+		with self.lock:
+			self.status = STATE['LEADER']
+			self.leader_id = self.server_id
+
+	def revert_to_follower(self, new_term, new_leader_id):
+		with self.lock:
+			if self.status == STATE['CANDIDATE'] or self.status == STATE['LEADER']:
+				self.status = STATE['FOLLOWER']
+
+			self.term = new_term
+			self.leader_id = new_leader_id
+
+	def get_voted_for(self):
+		return self.voted_for['term'], self.voted_for['server_id']
+	
+	def cast_vote(self, candidate_term, candidate_id):
+		with self.lock:
+			self.term = candidate_term
+			self.voted_for['term'] = candidate_id
+			self.voted_for['server_id'] = candidate_id
+			
 	def get_last_committed_sequence_for(self, client_id):
 		with self.lock:
 			return self.last_applied_command_per_client[client_id]
@@ -116,4 +144,5 @@ class Log:
 			self.last_commit_idx = 0
 			self.log_idx = 0
 			self.last_applied_idx = 0
-			delete_log_backup()
+			self.delete_log_backup()
+			
