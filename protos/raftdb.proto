@@ -6,7 +6,7 @@ service Client {
 }
 
 service RaftElectionService {
-	rpc Heartbeat (Heartbeat) returns (HeartbeatResponse) {}
+	rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
 	rpc RequestVote (VoteRequest) returns (VoteResponse) {}
 }
 
@@ -28,15 +28,15 @@ message PutResponse {
 	int32 code = 1;
 }
 
-message Heartbeat {
+message HeartbeatRequest {
 	int32 term = 1;
-	int32 serverId = 2;
+	string serverId = 2;
 }
 
 message HeartbeatResponse {
 	int32 code = 1;
 	int32 term = 2;
-	int32 leaderId = 3;
+	string leaderId = 3;
 }
 
 message LogEntry {
@@ -63,10 +63,11 @@ message VoteRequest {
 	int32 term = 1;
 	int32 lastLogTerm = 2;
 	int32 lastLogIndex = 3;
-	int32 candidateId = 4;
+	string candidateId = 4;
 }
 
 message VoteResponse {
 	bool success = 1;
 	int32 term = 2;
+	string leaderId = 3;
 }
