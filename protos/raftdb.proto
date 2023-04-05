@@ -5,11 +5,6 @@ service Client {
 	rpc Put (PutRequest) returns (PutResponse) {}
 }
 
-service Raft {
-	rpc AppendEntries (LogEntry) returns (LogEntryResponse) {}
-	rpc RequestVote (VoteRequest) returns (VoteResponse) {}
-}
-
 service RaftElectionService {
 	rpc Heartbeat (Heartbeat) returns (HeartbeatResponse) {}
 	rpc RequestVote (VoteRequest) returns (VoteResponse) {}

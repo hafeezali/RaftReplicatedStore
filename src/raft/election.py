@@ -22,14 +22,10 @@ class Election(raftdb_grpc.RaftElectionService):
         self.num_votes = 0
         self.peers = peers
         self.serverId = serverId
-        self.leaderId = -1 # Will get updated when a leader sends a heartbeat --- IS THIS NEEDED??
-        # What is this lock used for? 
-        # No need of this lock, must use lock from log
-        # self.__lock = Lock()
+        # self.leaderId = -1 -- moved to log
+        # self.__lock = Lock() -- not needed
 
         self.__log = log
-        with log.__lock:
-            self.__log.status = config.STATE.FOLLOWER
 
         self.election_timeout()
 
@@ -272,12 +268,15 @@ class Election(raftdb_grpc.RaftElectionService):
         
         else:
             # voter term and candidate term are equal
-            voted_for_Id = self.__log.voted_for[self.__log.term]
-            if voted_for_Id > 0 and voted_for_Id != candidate_Id:
-                # already voted for someone else
-                return False, self.__log.term
+            voted_for_term = self.__log.voted_for['term']
+            voted_for_id = self.__log.voted_for['server_id']
+            if voted_for_term == candidate_term: 
+                if voted_for_id > 0 and voted_for_id != candidate_Id:
+                    # already voted for someone else
+                    return False, self.__log.term
             
-            else: 
+            elif voted_for_term < candidate_term or \
+                (voted_for_term == candidate_term and voted_for_id == candidate_Id): 
                 # We have not voted for anyone, or we have already voted for this candidate
                 # Check log to see if candidate's is more complete than ours
 
@@ -290,10 +289,12 @@ class Election(raftdb_grpc.RaftElectionService):
   
                     with self.__log.lock:
                         self.__log.term = candidate_term # Technically not needed since terms are equal
-                        self.__log.voted_for[self.__log.term] = candidate_Id
+                        self.__log.voted_for['term'] = candidate_term
+                        self.__log.voted_for['server_id'] = candidate_Id
 
                     return True, self.__log.term
-                
                 else:
                     return False, self.__log.term
+            else:
+                return False, self.__log.term
    
