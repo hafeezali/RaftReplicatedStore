@@ -39,7 +39,7 @@ class Election(raftdb_grpc.RaftElectionService):
         Once the election timeout has passed, this function starts the leader election
         '''
         # logger.info('starting election')
-        with self.__log.__lock:
+        with self.__log.lock:
             self.__log.term += 1
             self.__log.status = config.STATE.CANDIDATE
         self.num_votes = 0
@@ -102,7 +102,7 @@ class Election(raftdb_grpc.RaftElectionService):
         self.num_votes += 1
         if self.num_votes >= self.majority:
             # why is this lock even needed here? what is the significance? The election process is run by only one thread no?
-            with self.__log.__lock:
+            with self.__log.lock:
                 self.__log.status = config.STATE.LEADER
             
             self.leaderId = self.serverId
@@ -134,7 +134,7 @@ class Election(raftdb_grpc.RaftElectionService):
                 # Need heartbeat response from append entries, added term proto to be sent back
                     if response.term > self.__log.term:
                         # We are not the most up to date term, revert to follower
-                        with self.__log.__lock:
+                        with self.__log.lock:
                             self.__log.term = response.term
                             self.__log.status = config.STATE.FOLLOWER
 
@@ -164,7 +164,7 @@ class Election(raftdb_grpc.RaftElectionService):
 
         '''
         if self.__log.term < sender_term:
-            with self.__log.__lock:
+            with self.__log.lock:
                 if self.__log.status == config.STATE.CANDIDATE or \
                     self.__log.status == config.STATE.LEADER:
                     self.__log.status = config.STATE.FOLLOWER
@@ -220,7 +220,7 @@ class Election(raftdb_grpc.RaftElectionService):
                     elif not vote:
                         voter_term = vote_response.term
                         if voter_term > self.__log.term:
-                            with self.__log.__lock:
+                            with self.__log.lock:
                                 self.__log.status = config.STATE.FOLLOWER
                                 ### Update self term? - Yes
                                 self.__log.term = voter_term
@@ -246,6 +246,8 @@ class Election(raftdb_grpc.RaftElectionService):
         else: reject vote
 
         '''
+        # TODO: Update how voted for is used based on changes in Log.py
+
         # what's with so many election timeouts here?
         # Reset election timeout so that the follower does not immediately start a new election
         self.reset_election_timeout()
@@ -255,7 +257,7 @@ class Election(raftdb_grpc.RaftElectionService):
         voter_last_log_term = self.__log.get(voter_last_log_index).term
 
         if candidate_term > voter_term:
-            with self.__log.__lock:
+            with self.__log.lock:
                 self.__log.term = candidate_term
 
                 # Step down if we are the leader or candidate
@@ -270,8 +272,8 @@ class Election(raftdb_grpc.RaftElectionService):
         
         else:
             # voter term and candidate term are equal
-            # TODO: Wherever we update term, set voted for to -1 or something
-            if self.__log.voted_for_Id > 0 and self.__log.voted_for_Id != candidate_Id:
+            voted_for_Id = self.__log.voted_for[self.__log.term]
+            if voted_for_Id > 0 and voted_for_Id != candidate_Id:
                 # already voted for someone else
                 return False, self.__log.term
             
@@ -286,9 +288,9 @@ class Election(raftdb_grpc.RaftElectionService):
                     # Actually, why is it that we're updating term here? What is the exact reason? Perhaps can be used by consensus to decide whethere to accept entry or not but that can done in other ways. Is there any other reason? In an election, a node can vote for multiple leaders anyway right?
                     # Only one will get majority I think... No? 
   
-                    with self.__log.__lock:
+                    with self.__log.lock:
                         self.__log.term = candidate_term # Technically not needed since terms are equal
-                        self.__log.voted_for_Id = candidate_Id
+                        self.__log.voted_for[self.__log.term] = candidate_Id
 
                     return True, self.__log.term
                 
