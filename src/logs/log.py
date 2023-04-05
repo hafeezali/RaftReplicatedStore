@@ -33,6 +33,9 @@ class Log:
 
 		Thread(target=self.apply).start()
 
+	def delete_log_backup(self):
+		pass
+
 	def recover(self):
 		pass
 
@@ -51,18 +54,11 @@ class Log:
 		with self.lock:
 			self.term = term
 
-	def append(self, entry):
-		with self.lock:
-			self.list.append(entry)
-			self.log_idx += 1
-			return self.log_idx
-
 	def commit_upto(self, index):
 		with self.lock:
 			if self.last_commit_idx < index:
 				self.last_commit_idx = index
 
-	# Still think about string consistency. Can we apply to db, not respond to client who wrote but respond to clients who are reading with newer value? Is that still considered strongly consistent?
 	def apply(self):
 		while True:
 			c_idx = self.last_commit_idx
@@ -82,8 +78,15 @@ class Log:
 	def get(self, index):
 		return self.log.get(index)
 
-	def replace_at(self, index, entry):
-		self.log[index] = entry
+	def insert_at(self, index, entry):
+		with self.lock:
+			if index <= self.log_idx:
+				self.log[index] = entry
+				return index
+			else:
+				self.list.append(entry)
+				self.log_idx += 1
+				return self.log_idx
 
 	def is_applied(self, index):
 		return index <= self.last_applied_idx
@@ -100,5 +103,17 @@ class Log:
 		with self.lock:
 			self.status = status
 
-	def get_status(seld):
+	def get_status(self):
 		return self.status
+
+	def get_last_committed_sequence_for(self, client_id):
+		with self.lock:
+			return self.last_applied_command_per_client[client_id]
+
+	def clear(self):
+		with self.lock:
+			self.log.clear()
+			self.last_commit_idx = 0
+			self.log_idx = 0
+			self.last_applied_idx = 0
+			delete_log_backup()
