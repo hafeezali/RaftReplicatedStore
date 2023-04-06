@@ -15,14 +15,16 @@ import time
 # change this in protos -> todo
 class Consensus(raftdb_grpc.ConsensusServicer) :
 
-    def __init__(self, peers: list, store, log, server_id):
+
+    def __init__(self, peers: list, store, log, logger, server_id):
         self.__peers = peers
         # TODO: need to pass more params to Election
-        self.__election = Election(peers=peers, log=log, serverId=server_id)
+        self.__election = Election(peers=peers, store=store, log=log, logger=logger, serverId=server_id)
         self.__log = log
         self.lock = Lock()
         self.counter = dict()
         self.commit_done = dict()
+        self.logger = logger
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
         raftdb_grpc.add_ConsensusServicer_to_server(raftdb_grpc.ConsensusServicer, server)
         server.add_insecure_port('[::]:' + '50052')

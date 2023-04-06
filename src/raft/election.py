@@ -14,18 +14,19 @@ from logs.log import Log
 class Election(raftdb_grpc.RaftElectionService):
 
     # What is queue and why is that needed? Is database needed? Isn't just log enough?
-    def __init__(self, peers: list, log: Log, serverId: int):
+    def __init__(self, peers: list, log: Log, serverId: int, logger):
         self.timeout_thread = None
         self.num_votes = 0
         self.peers = peers
         self.serverId = serverId
         self.__log = log
+        self.logger = logger
+        self.election_timeout()
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
         raftdb_grpc.add_RaftElectionServiceServicer_to_server(raftdb_grpc.RaftElectionService, server)
         server.add_insecure_port('[::]:' + '50052')
         server.start()
         server.wait_for_termination()
-        self.election_timeout()
 
 
     # What triggers an election when leader dies? Should there be a thread that keep track of heartbeats and server state and triggers an election accordingly?

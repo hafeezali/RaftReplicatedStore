@@ -4,10 +4,11 @@ from concurrent import futures
 from store.database import Database
 from logs.log import Log
 import os
-
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
+from logger import Logging
+
 
 class Server(raftdb_grpc.ClientServicer):
 
@@ -15,7 +16,8 @@ class Server(raftdb_grpc.ClientServicer):
 		self.store = Database(type='memory', server_id='server_1')
 		# who updates state? does this need be here or in election layer?
 		self.log = Log(server_id, self.store)
-		self.consensus = Consensus(peers=peer_list, store=self.store, log = self.log, server_id = server_id)
+    logger = Logging(server_id).get_logger()
+		self.consensus = Consensus(peers=peer_list, store=self.store, log = self.log, logger = self.logger, server_id = server_id,)
 
 	def Get(self, request, context):
 		# Implement leader check logic
