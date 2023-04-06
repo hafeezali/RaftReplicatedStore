@@ -7,6 +7,8 @@ from raft.config import STATE
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
+from logger import Logging
+
 
 class Server(raftdb_grpc.ClientServicer):
 
@@ -17,7 +19,9 @@ class Server(raftdb_grpc.ClientServicer):
 		self.log = Log(server_id, self.store)
 		self.client_port = client_port
 		self.raft_port = raft_port
-		self.consensus = Consensus(peer_list, self.store, self.log)
+		logger = Logging(server_id).get_logger()
+		self.consensus = Consensus(peer_list, self.store, self.log, self.logger)
+		
 
 	def Get(self, request, context):
 		# Implement leader check logic
