@@ -8,6 +8,7 @@ from raft.election import Election
 from logs.log import Log
 import raft.config as config
 from threading import Lock, Thread
+import time
 
 # Shouldn't this be implementing RaftServicer? Probably have to split that stupid shit RaftService to ConsensusService and ElectionService
 # change this in protos -> todo
@@ -63,7 +64,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             self.__log.commit(log_index_to_commit)
             while self.__log.is_applied(log_index_to_commit) :
                 time.sleep(100)
-              print("waiting to go to db")
+                print("waiting to go to db")
 
             return 'OK'
 

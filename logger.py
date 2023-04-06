@@ -18,7 +18,7 @@ class Logging:
     def get_logger(self):
         logging.basicConfig(filename=self.log_file_name, 
                             level=self.log_level,
-                            format='%(asctime)s : %(name)s : %(message)s', 
+                            format='%(asctime)s : %(name)s : {%(pathname)s:%(funcName)s:%(lineno)d} : %(message)s', 
                             datefmt='%d-%b-%y %H:%M:%S',
                             filemode='w')
 
