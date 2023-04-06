@@ -6,6 +6,7 @@ class Logging:
     def __init__(self, server_id):
         self.log_level = logging.DEBUG
         # Logger name is set to server id
+        server_id = server_id.replace("'", "")
         self.logger = logging.getLogger(server_id)
 
         log_folder_path = '/Users/hafeezali/CS_739/Project2/logs_dir'

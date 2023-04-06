@@ -86,7 +86,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
     # Proably wanna rename this to correct_follower_log and broadcast entry. And maybe split into two methods?
     def broadcastEntry(self, follower : str, entry, log_index_to_commit):
-        with grpc.insecure_channel(follower) as channel:
+        with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
             self.logger.debug(f'Broadcasting append entry to {follower}')
             stub = raftdb_grpc.ConsensusStub(channel)
             prev_log_index = log_index_to_commit - 1

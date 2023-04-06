@@ -6,8 +6,8 @@ STATE = {
 	'LEADER': 3	
 }
 
-MIN_TIMEOUT = int(getenv('MIN_TIMEOUT', 5000))
-MAX_TIMEOUT =  int(getenv('MAX_TIMEOUT', 10000))
+MIN_TIMEOUT = int(getenv('MIN_TIMEOUT', 50000))
+MAX_TIMEOUT =  int(getenv('MAX_TIMEOUT', 100000))
 
 REQUESTS_TIMEOUT = 50
 HB_TIME = int(getenv('HB_TIME', 50))

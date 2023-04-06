@@ -47,19 +47,23 @@ def start_server_thread(port, grpc_server):
     grpc_server.wait_for_termination()
 
 def serve(server):
-    client_port = '50051'
+    # client_port = '50051'
     peer_port = '50052'
     
-    grpc_client_server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
-    raftdb_grpc.add_ClientServicer_to_server(server, grpc_client_server)
+    # grpc_client_server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
+    # raftdb_grpc.add_ClientServicer_to_server(server, grpc_client_server)
 
     grpc_peer_server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
+    if server.election is not None:
+        print("We have election object woohoo")
     raftdb_grpc.add_RaftElectionServiceServicer_to_server(server.election, grpc_peer_server)
-    raftdb_grpc.add_ConsensusServicer_to_server(server.consensus, grpc_peer_server)
+    # raftdb_grpc.add_ConsensusServicer_to_server(server.consensus, grpc_peer_server)
     
 
-    Thread(target=start_server_thread, args=(client_port, grpc_client_server, )).start()
-    Thread(target=start_server_thread, args=(peer_port, grpc_peer_server, )).start()
+    # Thread(target=start_server_thread, args=(client_port, grpc_client_server, )).start()
+    election_thread = Thread(target=start_server_thread, args=(peer_port, grpc_peer_server, ))
+    election_thread.start()
+    election_thread.join()
 
 if __name__ == '__main__':
     # Implement arg parse to read server arguments
