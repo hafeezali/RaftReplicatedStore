@@ -158,7 +158,7 @@ class Election(raftdb_grpc.RaftElectionService):
 
     # Heartbeat RPC Handler
     # Executed by follower
-    def Heartbeat(self, sender_term, sender_serverId):
+    def Heartbeat(self, request, context):
         '''
         Check the term of the sender. If sender term is greater than ours,
 
@@ -171,6 +171,8 @@ class Election(raftdb_grpc.RaftElectionService):
         '''
         self.logger.info(f'Received heartbeat from leader for {sender_term}')
         follower_term = self.__log.get_term()
+
+        sender_term, sender_serverId = request.term, request.serverId
         
         if follower_term <= sender_term:
             # Update our term to match sender term
@@ -247,8 +249,7 @@ class Election(raftdb_grpc.RaftElectionService):
     # where is the RequestVode handler?
     # RPC Request Vote Handler
     # Executed by Follower
-    def RequestVote(self, candidate_term: int, candidate_last_log_term: int,
-                    candidate_last_log_index: int, candidate_Id: int):
+    def RequestVote(self, request, context):
         '''
         # Decide whether to vote for candidate or not on receiving request vote RPC.
 
@@ -265,6 +266,10 @@ class Election(raftdb_grpc.RaftElectionService):
         else: reject vote
 
         '''
+        candidate_term, candidate_Id = request.term, request.candidateId
+        candidate_last_log_term = request.lastLogTerm
+        candidate_last_log_index = request.lastLogIndex
+
         self.logger.info(f'Received vote request for term: {candidate_term} from {candidate_Id}')
         # what's with so many election timeouts here?
         # Reset election timeout so that the follower does not immediately start a new election
