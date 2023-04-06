@@ -32,8 +32,8 @@ class Election(raftdb_grpc.RaftElectionService):
         '''
         Once the election timeout has passed, this function starts the leader election
         '''
-        self.logger.debug(f'Starting a new election for term {self.__log.get_term()}')
         self.__log.set_self_candidate()
+        self.logger.debug(f'Starting a new election for term {self.__log.get_term()}')
         self.num_votes = 0
         
         # Calculate majority
@@ -206,7 +206,7 @@ class Election(raftdb_grpc.RaftElectionService):
 
         # get term of last item in log
         # can just do log.term -- current term -- different from last log term
-        if candidate_last_log_index == 0 : 
+        if candidate_last_log_index == -1 : 
             candidate_last_log_term = 0
         else :
             candidate_last_log_term = self.__log.get(candidate_last_log_index).term
@@ -220,9 +220,10 @@ class Election(raftdb_grpc.RaftElectionService):
             
             self.logger.info(f'Requesting vote for term: {term} from {voter}')
             with grpc.insecure_channel(voter) as channel:
-                stub = raftdb_grpc.RaftElectionServiceStub(channel)
+                self.logger.info(f'Channel for term {term} to {voter}')
 
                 try: 
+                    stub = raftdb_grpc.RaftElectionServiceStub(channel)
                     vote_response = stub.RequestVote(request, timeout=config.RPC_TIMEOUT)
                     
                     # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?
@@ -244,7 +245,8 @@ class Election(raftdb_grpc.RaftElectionService):
                     if status_code.value == grpc.StatusCode.DEADLINE_EXCEEDED:
                         # timeout, will retry if we are still leader
                         self.logger.debug(f'Request vote failed with timeout error, peer: {voter}, details: {e.details()}')
-
+                    else :
+                        self.logger.debug(f'Some other error, details: {e.details()}') 
 
     # where is the RequestVode handler?
     # RPC Request Vote Handler

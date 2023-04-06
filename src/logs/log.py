@@ -62,7 +62,7 @@ class Log:
 		self.last_commit_idx = -1
 		self.log_idx = -1
 		self.last_applied_idx = -1
-		self.term = -1
+		self.term = 0
 		self.status = STATE['FOLLOWER']
 		self.voted_for = {
 			'term': -1,

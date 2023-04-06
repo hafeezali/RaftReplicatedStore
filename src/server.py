@@ -16,8 +16,8 @@ class Server(raftdb_grpc.ClientServicer):
     def __init__(self, type, server_id, peer_list):
         self.store = Database(type=type, server_id=server_id)
         # who updates state? does this need be here or in election layer?
-        self.log = Log(server_id, self.store, self.logger)
         self.logger = Logging(server_id).get_logger()
+        self.log = Log(server_id, self.store, self.logger)
         self.election = Election(peers=peer_list,log=self.log, logger=self.logger, serverId=server_id)
         
         # Start thread for election service
@@ -69,4 +69,5 @@ if __name__ == '__main__':
     # raft_port = '50052'
 
     server = Server(type=os.getenv('TYPE'), server_id = os.getenv('SERVERID'),peer_list=os.getenv('PEERS'))
-    serve(server)
+    print(str(os.getenv('PEERS')))
+	# serve(server)
