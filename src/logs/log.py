@@ -6,7 +6,7 @@ from os import path, getenv, makedirs
 from threading import Lock, Thread
 
 import time
-import shelve
+import pickle
 
 from raft.config import STATE
 
@@ -116,6 +116,8 @@ class Log:
 
 		self.logger.info("Clear log backup done")
 
+		self.logger.info("Clear log backup done")
+
 	'''
 	On node restart, we want to recover node state and pickup from where we left off. This involves recovering log apart from server state
 	'''
@@ -169,6 +171,14 @@ class Log:
 
 		self.logger.info("Recover done")
 
+		self.log_file.sync()
+		self.config_file.sync()
+
+		# remove this
+		self.debug_print_log()
+
+		self.logger.info("Recover done")
+
 	'''
 	Flush entry at index to disk
 	'''
@@ -197,7 +207,9 @@ class Log:
 						self.logger.info(key + " changed")
 						config_file[key] = getattr(self, key)
 						self.config_change[key] = False
+
 			config_file.close()
+
 			self.logger.info("Flush config sleeping")
 			time.sleep(100/1000)
 
@@ -301,6 +313,7 @@ class Log:
 
 		with self.lock:
 			self.logger.info("Log size before: " + str(len(self.log)))
+
 			self.log_idx += 1
 			self.log[self.log_idx] = entry
 			self.log[self.log_idx]['commit_done'] = False
@@ -366,6 +379,8 @@ class Log:
 			self.status = STATE['CANDIDATE']
 		self.config_change['status'] = True
 		self.config_change['term'] = True
+		
+		self.logger.info("Set self candidate done")		
 
 		self.logger.info("Set self candidate done")		
 
@@ -398,6 +413,8 @@ class Log:
 			self.config_change['status'] = True
 			self.config_change['leader_id'] = True
 			self.config_change['term'] = True
+
+		self.logger.info("Revert to follower done")
 
 		self.logger.info("Revert to follower done")
 

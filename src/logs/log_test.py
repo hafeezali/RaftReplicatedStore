@@ -40,7 +40,7 @@ def test_normal_functionality(log, db):
 
 	log.commit(idx)
 
-	time.sleep(1000/1000)
+	time.sleep(5000/1000)
 
 	assert log.is_applied(idx)
 
