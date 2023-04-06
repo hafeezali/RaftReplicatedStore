@@ -77,7 +77,7 @@ class Log:
 			time.sleep(100)
 
 	def get(self, index):
-		return self.log.get(index)
+		return self.log[index]
 
 	def insert_at(self, index, entry):
 		with self.lock:

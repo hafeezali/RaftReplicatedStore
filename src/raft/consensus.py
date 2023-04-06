@@ -6,23 +6,30 @@ import protos.raftdb_pb2_grpc as raftdb_grpc
 from store.database import Database
 from raft.election import Election
 from logs.log import Log
-import raft.config as config
+import raft.config as config 
 from threading import Lock, Thread
+from concurrent import futures
 import time
 
 # Shouldn't this be implementing RaftServicer? Probably have to split that stupid shit RaftService to ConsensusService and ElectionService
 # change this in protos -> todo
 class Consensus(raftdb_grpc.ConsensusServicer) :
 
-    def __init__(self, peers: list, store, log, logger):
+
+    def __init__(self, peers: list, store, log, logger, server_id):
         self.__peers = peers
         # TODO: need to pass more params to Election
-        self.__election = Election(peers=peers, store=store, log=log, logger=logger)
+        self.__election = Election(peers=peers, store=store, log=log, logger=logger, serverId=server_id)
         self.__log = log
         self.lock = Lock()
         self.counter = dict()
         self.commit_done = dict()
         self.logger = logger
+        server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+        raftdb_grpc.add_ConsensusServicer_to_server(raftdb_grpc.ConsensusServicer, server)
+        server.add_insecure_port('[::]:' + '50052')
+        server.start()
+        server.wait_for_termination()
        
     
     # why are we calling it command instead of entry?
@@ -85,7 +92,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
     # Proably wanna rename this to correct_follower_log and broadcast entry. And maybe split into two methods?
     def broadcastEntry(self, follower : str, entry, log_index_to_commit):
         with grpc.insecure_channel(follower) as channel:
-            stub = raftdb_grpc.RaftStub(channel)
+            stub = raftdb_grpc.ConsensusStub(channel)
             prev_log_index = log_index_to_commit - 1
             request = self.create_log_entry_request(prev_log_index, entry)
             response = stub.AppendEntries(request)
