@@ -2,13 +2,11 @@ import time
 from threading import Lock, Thread
 from queue import Queue
 import raft.config as config
-import concurrent.futures
+import concurrent.futures as futures
 import random
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
-from store.database import Database
-from raft.consensus import Consensus
 from logs.log import Log
 
 
@@ -23,8 +21,12 @@ class Election(raftdb_grpc.RaftElectionService):
         self.serverId = serverId
         self.__log = log
         self.logger = logger
-
         self.election_timeout()
+        server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+        raftdb_grpc.add_RaftElectionServiceServicer_to_server(raftdb_grpc.RaftElectionService, server)
+        server.add_insecure_port('[::]:' + '50052')
+        server.start()
+        server.wait_for_termination()
 
 
     # What triggers an election when leader dies? Should there be a thread that keep track of heartbeats and server state and triggers an election accordingly?
@@ -113,7 +115,7 @@ class Election(raftdb_grpc.RaftElectionService):
     def sendHeartbeat(self, follower):
         # To send heartbeats
         with grpc.insecure_channel(follower) as channel:
-            stub = raftdb_grpc.RaftStub(channel)
+            stub = raftdb_grpc.RaftElectionServiceStub(channel)
             term = self.__log.get_term()
             request = raftdb.HeartbeatRequest(
                 term = term,
@@ -179,8 +181,11 @@ class Election(raftdb_grpc.RaftElectionService):
 
         # get term of last item in log
         # can just do log.term -- current term -- different from last log term
-        candidate_last_log_term = self.__log.get(candidate_last_log_index).term
-
+        if candidate_last_log_index == 0 : 
+            candidate_last_log_term = 0
+        else :
+            candidate_last_log_term = self.__log.get(candidate_last_log_index).term
+        
         request = raftdb.VoteRequest(term = candidate_term, 
                                      lastLogTerm = candidate_last_log_term,
                                      lastLogIndex = candidate_last_log_index,
@@ -189,7 +194,7 @@ class Election(raftdb_grpc.RaftElectionService):
         while self.__log.get_status() == config.STATE['CANDIDATE'] and self.__log.get_term() == candidate_term:
 
             with grpc.insecure_channel(voter) as channel:
-                stub = raftdb_grpc.RaftStub(channel)
+                stub = raftdb_grpc.RaftElectionServiceStub(channel)
                 vote_response = stub.RequestVote(request)
                 
                 # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?

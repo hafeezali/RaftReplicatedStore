@@ -1,18 +1,18 @@
 from collections import deque
 from threading import Lock, Thread
 
-import memorydatabase.mem_store
-import rocksdatabase.rocks_store
+from store.memorydatabase.mem_store import MemoryStore
+# from store.rocksdatabase.rocks_store import RocksStore
 import shelve
 
 class Database:
 
-	def __init__(self, type = 'memory', server_id):
+	def __init__(self, server_id, type = 'memory'):
 		if type == 'memory':
 			self.db = MemoryStore()
-		else:
-			store_name = server_id + ".db"
-			self.db = RocksStore(store_name)
+		# else:
+		# 	store_name = server_id + ".db"
+		# 	self.db = RocksStore(store_name)
 
 		self.lock = Lock()
 		
