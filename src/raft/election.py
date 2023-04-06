@@ -16,12 +16,13 @@ from logs.log import Log
 class Election(raftdb_grpc.RaftElectionService):
 
     # What is queue and why is that needed? Is database needed? Isn't just log enough?
-    def __init__(self, peers: list, log: Log, serverId: int):
+    def __init__(self, peers: list, log: Log, serverId: int, logger):
         self.timeout_thread = None
         self.num_votes = 0
         self.peers = peers
         self.serverId = serverId
         self.__log = log
+        self.logger = logger
 
         self.election_timeout()
 

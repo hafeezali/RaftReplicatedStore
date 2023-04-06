@@ -13,14 +13,15 @@ from threading import Lock, Thread
 # change this in protos -> todo
 class Consensus(raftdb_grpc.ConsensusServicer) :
 
-    def __init__(self, peers: list, store, log):
+    def __init__(self, peers: list, store, log, logger):
         self.__peers = peers
         # TODO: need to pass more params to Election
-        self.__election = Election(peers=peers, store=store, log=log)
+        self.__election = Election(peers=peers, store=store, log=log, logger=logger)
         self.__log = log
         self.lock = Lock()
         self.counter = dict()
         self.commit_done = dict()
+        self.logger = logger
        
     
     # why are we calling it command instead of entry?
