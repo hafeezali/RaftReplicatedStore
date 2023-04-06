@@ -15,7 +15,7 @@ import time
 class Consensus(raftdb_grpc.ConsensusServicer) :
 
 
-    def __init__(self, peers: list, store, log, logger, server_id):
+    def __init__(self, peers: list, log, logger):
         self.__peers = peers
         self.__log = log
         self.lock = Lock()

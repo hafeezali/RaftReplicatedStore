@@ -8,8 +8,6 @@ services:
       - TYPE='memory'
       - SERVERID='server-1'
       - PEERS=server-2:50052,server-3:50052
-      
-      
 
   server-2:
     image : kvstore
