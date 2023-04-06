@@ -18,7 +18,7 @@ class Server(raftdb_grpc.ClientServicer):
         # who updates state? does this need be here or in election layer?
         self.log = Log(server_id, self.store)
         self.logger = Logging(server_id).get_logger()
-        self.election = Election(peers=peer_list, store=self.store, log=self.log, logger=self.logger, serverId=server_id)
+        self.election = Election(peers=peer_list,log=self.log, logger=self.logger, serverId=server_id)
         
         # Start thread for election service
         Thread(target=self.election.run_election_service()).start()
@@ -54,8 +54,8 @@ def serve(server):
     raftdb_grpc.add_ClientServicer_to_server(server, grpc_client_server)
 
     grpc_peer_server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
-    raftdb_grpc.add_RaftElectionServiceServicer_to_server(server, grpc_peer_server)
-    raftdb_grpc.add_ConsensusServicer_to_server(server, grpc_peer_server)
+    raftdb_grpc.add_RaftElectionServiceServicer_to_server(server.election, grpc_peer_server)
+    raftdb_grpc.add_ConsensusServicer_to_server(server.consensus, grpc_peer_server)
     
 
     Thread(target=start_server_thread, args=(client_port, grpc_client_server, )).start()
