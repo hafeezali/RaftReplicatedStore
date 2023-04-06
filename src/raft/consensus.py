@@ -4,7 +4,6 @@ import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
 from store.database import Database
-from raft.election import Election
 from logs.log import Log
 import raft.config as config 
 from threading import Lock, Thread
@@ -18,18 +17,11 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
     def __init__(self, peers: list, store, log, logger, server_id):
         self.__peers = peers
-        # TODO: need to pass more params to Election
-        self.__election = Election(peers=peers, store=store, log=log, logger=logger, serverId=server_id)
         self.__log = log
         self.lock = Lock()
         self.counter = dict()
         self.commit_done = dict()
         self.logger = logger
-        server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
-        raftdb_grpc.add_ConsensusServicer_to_server(raftdb_grpc.ConsensusServicer, server)
-        server.add_insecure_port('[::]:' + '50052')
-        server.start()
-        server.wait_for_termination()
        
     
     # why are we calling it command instead of entry?

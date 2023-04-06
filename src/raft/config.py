@@ -16,6 +16,9 @@ MAX_LOG_WAIT = int(getenv('MAX_LOG_WAIT', 150))
 RESPONSE_CODE_OK = 200
 RESPONSE_CODE_REJECT = 500
 
+# RPC timeout in seconds
+RPC_TIMEOUT = 5
+
 def chunks(l, n):
     n = max(1, n)
     return (l[i:i+n] for i in range(0, len(l), n))
