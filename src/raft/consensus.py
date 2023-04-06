@@ -140,7 +140,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                                 'term' : request.term,
                                 'clientid': request.Entry.clientid,
                                 'sequence_number' : request.Entry.sequence_number}
-            self.__log.insert_at(self.__log.log_idx, value) 
+            self.__log.insert_at(request.logIndex, value) 
             self.__log.commit_upto(request.lastCommitIndex)   
             return raftdb.LogEntryResponse(code=200, term = self.__log.get_term()) 
         else:
