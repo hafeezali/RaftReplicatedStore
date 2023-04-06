@@ -211,10 +211,7 @@ class Election(raftdb_grpc.RaftElectionService):
         else :
             candidate_last_log_term = self.__log.get(candidate_last_log_index).term
         
-        request = raftdb.VoteRequest(term = candidate_term, 
-                                     lastLogTerm = candidate_last_log_term,
-                                     lastLogIndex = candidate_last_log_index,
-                                     candidateId = self.serverId)
+        
 
         while self.__log.get_status() == config.STATE['CANDIDATE'] and self.__log.get_term() == candidate_term:
             
@@ -224,8 +221,13 @@ class Election(raftdb_grpc.RaftElectionService):
 
                 try: 
                     stub = raftdb_grpc.RaftElectionServiceStub(channel)
-                    vote_response = stub.RequestVote(request, timeout=config.RPC_TIMEOUT)
-                    
+                    self.logger.info(f'Stub for {term} to {voter}')
+                    request = raftdb.VoteRequest(term = candidate_term, 
+                                     lastLogTerm = candidate_last_log_term,
+                                     lastLogIndex = candidate_last_log_index,
+                                     candidateId = self.serverId)
+                    vote_response = stub.RequestVote(request, timeout = config.RPC_TIMEOUT)
+                    self.logger.info(f'Vote Response for term {term} is {vote_response}')
                     # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?
                     if vote_response:
                         vote = vote_response.success
@@ -268,6 +270,7 @@ class Election(raftdb_grpc.RaftElectionService):
         else: reject vote
 
         '''
+        self.logger.info(f'Received vote request for term: {candidate_term} from {candidate_Id}')
         candidate_term, candidate_Id = request.term, request.candidateId
         candidate_last_log_term = request.lastLogTerm
         candidate_last_log_index = request.lastLogIndex
@@ -285,13 +288,13 @@ class Election(raftdb_grpc.RaftElectionService):
             # Step down if we are the leader or candidate    
             self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_Id}')
             self.__log.revert_to_follower(candidate_term, candidate_Id)
-            return True, candidate_term, candidate_Id
+            return raftdb.VoteResponse(success = True, term = candidate_term, leaderId = candidate_Id)
 
         elif candidate_term < voter_term:
 
             self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}, voter term: {voter_term}')
             # Reject request vote
-            return False, self.__log.get_term(), self.__log.get_leader()
+            return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
         
         else:
             # voter term and candidate term are equal
@@ -301,7 +304,7 @@ class Election(raftdb_grpc.RaftElectionService):
                     # already voted for someone else
 
                     self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}, already voted for {voted_for_id}')
-                    return False, self.__log.get_term(), self.__log.get_leader()
+                    return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
             
             elif voted_for_term < candidate_term or \
                 (voted_for_term == candidate_term and voted_for_id == candidate_Id): 
@@ -317,13 +320,13 @@ class Election(raftdb_grpc.RaftElectionService):
 
                     self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_Id}')
                     self.__log.cast_vote(candidate_term, candidate_Id)
-                    return True, self.__log.get_term(), self.__log.get_leader()
+                    return raftdb.VoteResponse(success = True, term = self.__log.get_term(), leaderId = self.__log.get_leader())
                 
                 else:
                     self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
-                    return False, self.__log.get_term(), self.__log.get_leader()
+                    return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
                 
             else:
                 self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
-                return False, self.__log.get_term(), self.__log.get_leader()
+                return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
    
