@@ -2,7 +2,6 @@ import rocksdb
 
 from os import path, makedirs
 
-# Make this guy implement an interface
 class RocksStore:
 
 	def __init__(self, store_name):
