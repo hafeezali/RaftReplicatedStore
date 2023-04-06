@@ -19,11 +19,11 @@ class Server(raftdb_grpc.ClientServicer):
         self.logger = Logging(server_id).get_logger()
         self.log = Log(server_id, self.store, self.logger)
         self.election = Election(peers=peer_list,log=self.log, logger=self.logger, serverId=server_id)
-        
+
         # Start thread for election service
         Thread(target=self.election.run_election_service()).start()
 
-        self.consensus = Consensus(peers=peer_list, store=self.store, log = self.log, logger = self.logger, server_id = server_id,)
+        self.consensus = Consensus(peers=peer_list, log=self.log, logger=self.logger)
 
     def Get(self, request, context):
         # Implement leader check logic
@@ -68,6 +68,6 @@ if __name__ == '__main__':
     # client_port = '50051'
     # raft_port = '50052'
 
-    server = Server(type=os.getenv('TYPE'), server_id = os.getenv('SERVERID'),peer_list=os.getenv('PEERS'))
-    print(str(os.getenv('PEERS')))
-	# serve(server)
+    peer_list = peer_list=os.getenv('PEERS').split(',')
+    server = Server(type=os.getenv('TYPE'), server_id = os.getenv('SERVERID'),peer_list=peer_list)
+    serve(server)
