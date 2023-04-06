@@ -8,7 +8,7 @@ class Logging:
         # Logger name is set to server id
         self.logger = logging.getLogger(server_id)
 
-        log_folder_path = '/Users/hafeezali/CS_739/Project2/logs_dir'
+        log_folder_path = '/home/logs_dir'
         os.path.dirname(log_folder_path)
         if not os.path.exists(log_folder_path):
             os.makedirs(log_folder_path)
