@@ -6,7 +6,7 @@ from os import path, getenv, makedirs
 from threading import Lock, Thread
 
 import time
-import shelve
+import pickle
 
 from raft.config import STATE
 
@@ -29,9 +29,8 @@ Log layer responsible for
 TODO:
 1. All persistent state can be collated into one dict. Easier persistence and recovery
 2. clear_log_backup() can live inside clear()
-3. When do we close the files opened using shelve?
+3. Shleve is having some weird behavior when appending the first element to the list - investigate this later
 4. We probably want the locks to become more finer for some performance gains
-5. Looks like shelve not working
 '''
 
 class Log:
@@ -47,8 +46,8 @@ class Log:
 		self.logger = logger
 
 		self.backup_dir = 'backup'
-		log_backup_file_name = server_id + '_log.dbm'
-		config_backup_file_name = server_id + '_config.dbm'
+		log_backup_file_name = server_id + '_log'
+		config_backup_file_name = server_id + '_config'
 
 		self.log_path = path.join(self.backup_dir, log_backup_file_name)
 		self.config_path = path.join(self.backup_dir, config_backup_file_name)
@@ -90,6 +89,8 @@ class Log:
 		if not path.exists(self.backup_dir):
 			makedirs('backup')
 
+		self.logger.info("Check backup dir done")
+
 	'''
 	In a scenario we are clearing the log in memory, we want to clear it on the persistent store as well
 	IMP! This is only to be called from log.clear()
@@ -102,13 +103,18 @@ class Log:
 		self.config_file['log_idx'] = self.log_idx
 		self.config_file['last_applied_idx'] = self.last_applied_idx
 
+		self.logger.info("Clear log backup done")
+
 	'''
 	On node restart, we want to recover node state and pickup from where we left off. This involves recovering log apart from server state
 	'''
 	def recover(self):
 		self.logger.info("Recover")
 
-		self.log_file = shelve.open(self.log_path, 'c', writeback=True)
+		with open(self.log_path, 'rb') as f:
+			self.log = pickle.load(f)
+		with open(self.config_path, 'rb') as f:
+
 		self.config_file = shelve.open(self.config_path, 'c', writeback=True)
 
 		try:
@@ -146,14 +152,31 @@ class Log:
 			self.config_file['leader_id'] = self.leader_id
 			self.config_file['last_applied_command_per_client'] = self.last_applied_command_per_client
 
+		self.log_file.sync()
+		self.config_file.sync()
+
+		# remove this
+		self.debug_print_log()
+
+		self.logger.info("Recover done")
+
 	'''
 	Flush entry at index to disk
 	'''
 	def flush(self, index):
-		self.logger.info("Flush")
+		self.logger.info("Flush for index: " + str(index))
 
-		self.log_file['log'].append(self.log[index])
-		self.log_file.sync()
+		self.logger.info("Log size before: " + str(len(self.log)))
+		self.debug_print_log()
+
+		# self.log_file['log'].append(self.log[index])
+		# self.log_file.sync()
+
+		self.debug_print_log()
+		self.logger.info("Log size after: " + str(len(self.log)))
+
+		self.logger.info("Flush done")
+		return True
 
 	'''
 	If any config has changed, persist that change. Dedicated thread created to achieve this
@@ -163,25 +186,31 @@ class Log:
 
 		while True:
 			with self.lock:
+				self.logger.info("Flush config woke up")
 				for key in self.config_change:
 					if self.config_change[key] is True:
 						self.logger.info(key + " changed")
 						self.config_file[key] = getattr(self, key)
 						self.config_change[key] = False
 			self.config_file.sync()
+			self.logger.info("Flush config sleeping")
 			time.sleep(100/1000)
 
 	'''
 	This will only be called by the leader node. This commits log entry at index. Entries can be committed out of order in leader
 	'''
 	def commit(self, index):
-		self.logger.info("Commit")
+		self.logger.info("Commit for index: " + str(index))
 
 		with self.lock:
 			self.commit_done[index] = True
-			while self.last_commit_idx < index and self.commit_done[self.last_commit_idx+1]:
+			self.logger.info("Start commit index: " + str(self.last_commit_idx))
+			while self.last_commit_idx < index and self.commit_done[self.last_commit_idx+1] is True:
 				self.last_commit_idx += 1
+			self.logger.info("End commit index: " + str(self.last_commit_idx))
 			self.config_change['last_commit_idx'] = True
+
+		self.logger.info("Commit done")
 
 	def get_log_idx(self):
 		self.logger.info("Get log idx")
@@ -196,7 +225,7 @@ class Log:
 			return self.term
 
 	def update_term(self, term):
-		self.logger.info("Update term")
+		self.logger.info("Update term to: " + str(term))
 
 		with self.lock:
 			self.term = term
@@ -206,13 +235,18 @@ class Log:
 	This will be called by follower nodes. This marks all logs till index as ready to be committed
 	'''
 	def commit_upto(self, index):
-		self.logger.info("Commit upto")
+		self.logger.info("Commit upto index: " + str(index))
 
 		with self.lock:
+			self.logger.info("Start last commit idx: " + str(self.last_commit_idx))
 			while self.last_commit_idx < index:
 				self.commit_done[self.last_commit_idx] = True
 				self.last_commit_idx += 1
+			self.commit_done[self.last_commit_idx] = True
+			self.logger.info("End last commit idx: " + str(self.last_commit_idx))
 		self.config_change['last_commit_idx'] = True
+
+		self.logger.info("Commit upto index done")
 
 	'''
 	This will be called by thread periodically to apply log entries to the database
@@ -221,50 +255,67 @@ class Log:
 		self.logger.info("Apply called")
 
 		while True:
-			c_idx = self.last_commit_idx
-			idx = self.last_applied_idx + 1
-			while idx <= c_idx:
-				flush_res = self.flush(idx)
-				if flush_res:
-					entry = self.get(idx)
-					self.database.put(entry.key, entry.value)
-					idx = idx + 1
-					self.last_applied_idx = self.last_applied_idx + 1
-					self.last_applied_command_per_client.update({entry.client_id, idx})
-					self.config_change['last_applied_idx'] = True
-					self.config_change['last_applied_command_per_client'] = True
-				else:
-					break
+			with self.lock:
+				self.logger.info("Apply started")
+				self.logger.info("Log size before: " + str(len(self.log)))
+				c_idx = self.last_commit_idx
+				idx = self.last_applied_idx + 1
+				self.logger.info("Last commit idx: " + str(c_idx))
+				self.logger.info("Starting apply index: " + str(idx))
+				while idx <= c_idx:
+					flush_res = self.flush(idx)
+					if flush_res:
+						entry = self.get(idx)
+						# remove this 
+						self.debug_print_log()
+						# 
+						self.logger.info('Applying value: ' + str(entry['value']) + ' to key: ' + str(entry['key']))
+						self.database.put(entry['key'], entry['value'])
+						idx = idx + 1
+						self.last_applied_idx = self.last_applied_idx + 1
+						self.last_applied_command_per_client.update({entry['clientid']: idx})
+						self.config_change['last_applied_idx'] = True
+						self.config_change['last_applied_command_per_client'] = True
+					else:
+						break
+				self.logger.info("Ending apply index: " + str(idx))
+			self.logger.info("Apply done. Going to sleep")
 			time.sleep(100/1000)
 
 	def get(self, index):
-		self.logger.info("Get")
+		self.logger.info("Get at index: " + str(index))
 
 		return self.log[index]
 
 	def append(self, entry):
-		self.logger.info("Append")
+		self.logger.info("Append entry- key:" + str(entry['key']) + ' value: ' + str(entry['value']))
 
 		with self.lock:
+			self.logger.info("Log size before: " + str(len(self.log)))
 			self.log.append(entry)
 			self.commit_done.append(False)
 			self.log_idx += 1
 			self.config_change['log_idx'] = True
+
+			self.logger.info("Log size after: " + str(len(self.log)))
+			self.logger.info("Append entry done")
 			return self.log_idx
 
 	def insert_at(self, index, entry):
-		self.logger.info("Insert at")
+		self.logger.info("Insert at index: " + str(index))
 
 		with self.lock:
 			if index <= self.log_idx:
 				self.log[index] = entry
 				self.commit_done[index] = False
+				self.logger.info("Insert at index done")
 				return index
 			else:
 				self.log.append(entry)
 				self.commit_done.append(False)
 				self.log_idx += 1
 				self.config_change['log_idx'] = True
+				self.logger.info("Insert at index done")
 				return self.log_idx
 
 	def is_applied(self, index):
@@ -279,18 +330,22 @@ class Log:
 			return self.leader_id
 
 	def update_leader(self, leader):
-		self.logger.info("Update leader")
+		self.logger.info("Update leader to: " + leader)
 
 		with self.lock:
 			self.leader_id = leader
 		self.config_change['leader_id'] = True
+		
+		self.logger.info("Update leader done")		
 
 	def update_status(self, status):
-		self.logger.info("Update status")
+		self.logger.info("Update status to: " + status)
 
 		with self.lock:
 			self.status = status
 		self.config_change['status'] = True
+
+		self.logger.info("Update status done")
 
 	def get_status(self):
 		self.logger.info("Get status")
@@ -305,6 +360,8 @@ class Log:
 			self.status = STATE['CANDIDATE']
 		self.config_change['status'] = True
 		self.config_change['term'] = True
+		
+		self.logger.info("Set self candidate done")		
 
 	def set_self_leader(self):
 		self.logger.info("Set self leader")
@@ -314,6 +371,8 @@ class Log:
 			self.leader_id = self.server_id
 		self.config_change['status'] = True
 		self.config_change['leader_id'] = True
+
+		self.logger.info("Set self leader done")
 
 	def revert_to_follower(self, new_term, new_leader_id):
 		self.logger.info("Revert to follower")
@@ -326,6 +385,8 @@ class Log:
 		self.config_change['status'] = True
 		self.config_change['leader_id'] = True
 		self.config_change['term'] = True
+
+		self.logger.info("Revert to follower done")
 
 	def get_voted_for(self):
 		self.logger.info("Get vorted for")
@@ -341,6 +402,8 @@ class Log:
 			self.voted_for['server_id'] = candidate_id
 		self.config_change['term'] = True
 		self.config_change['voted_for'] = True
+
+		self.logger.info("Case vote done")
 			
 	def get_last_committed_sequence_for(self, client_id):
 		self.logger.info("Get last committed sequence for")
@@ -357,4 +420,11 @@ class Log:
 			self.log_idx = -1
 			self.last_applied_idx = -1
 			self.clear_log_backup()
-			
+
+		self.logger.info("clear done")
+	
+	def debug_print_log(self):
+		self.logger.info("Debug print log")
+		for entry in self.log:
+			self.logger.info(str(entry['key']) + " : " + str(entry['value']))
+		self.logger.info("Debug print log done")

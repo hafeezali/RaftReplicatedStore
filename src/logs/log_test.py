@@ -22,29 +22,90 @@ def create_entry(key, value, term, clientid, sequence_number):
 	}
 	return entry
 
-def test_normal_insert(log, db):
+def test_normal_functionality(log, db):
 	clientid = 1
 	sequence_number = 1
 	term = 1
 
+	# clear log
 	log.clear()
 	idx = log.get_log_idx()
 
 	assert idx == -1
 
+	# append first entry
 	idx = log.append(create_entry(100, 1000, term, clientid, sequence_number))
 
 	assert idx == 0
 
 	log.commit(idx)
 
-	time.sleep(1000/1000)
+	time.sleep(5000/1000)
 
 	assert log.is_applied(idx)
 
+	# fetch first entry
 	assert db.get(100) == 1000
 
+	# append second entry
 	sequence_number = sequence_number + 1
+
+	idx = log.append(create_entry(100, 2000, term, clientid, sequence_number))
+
+	assert idx == 1
+
+	log.commit(idx)
+
+	time.sleep(5000/1000)
+
+	assert log.is_applied(idx)
+	# fetch updated value
+	assert db.get(100) == 2000
+
+	# append third entry
+	sequence_number = sequence_number + 1
+
+	idx = log.append(create_entry(100, 3000, term, clientid, sequence_number))
+
+	assert idx == 2
+
+	log.commit(idx)
+
+	time.sleep(5000/1000)
+
+	assert log.is_applied(idx)
+	# fetch updated value
+	assert db.get(100) == 3000
+
+	# append fourth entry on different key
+		sequence_number = sequence_number + 1
+
+	idx = log.append(create_entry(100, 2000, term, clientid, sequence_number))
+
+	assert idx == 1
+
+	log.commit(idx)
+
+	time.sleep(5000/1000)
+
+	assert log.is_applied(idx)
+	# fetch updated value
+	assert db.get(100) == 2000
+
+	# append third entry
+	sequence_number = sequence_number + 1
+
+	idx = log.append(create_entry(100, 3000, term, clientid, sequence_number))
+
+	assert idx == 2
+
+	log.commit(idx)
+
+	time.sleep(5000/1000)
+
+	assert log.is_applied(idx)
+	
+	return True
 
 
 if __name__ == '__main__':
@@ -52,5 +113,6 @@ if __name__ == '__main__':
 	db = MemoryStore()
 	log = Log('server_1', db, logger)
 
-	test_normal_insert(log, db)
+	if test_normal_functionality(log, db):
+		print('normal insert test passed')
 	
