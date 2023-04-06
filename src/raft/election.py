@@ -21,14 +21,10 @@ class Election(raftdb_grpc.RaftElectionService):
         self.serverId = serverId
         self.__log = log
         self.logger = logger
-        
+
+    def run_election_service(self):
         self.logger.debug('Starting Election Timeout')
         self.election_timeout()
-        server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
-        raftdb_grpc.add_RaftElectionServiceServicer_to_server(raftdb_grpc.RaftElectionService, server)
-        server.add_insecure_port('[::]:' + '50052')
-        server.start()
-        server.wait_for_termination()
 
 
     # What triggers an election when leader dies? Should there be a thread that keep track of heartbeats and server state and triggers an election accordingly?
@@ -174,22 +170,22 @@ class Election(raftdb_grpc.RaftElectionService):
 
         '''
         self.logger.info(f'Received heartbeat from leader for {sender_term}')
+        follower_term = self.__log.get_term()
         
-        if self.__log.get_term() <= sender_term:
+        if follower_term <= sender_term:
             # Update our term to match sender term
             # Update leader ID so that we can redirect requests to the leader
 
             # If this server was leader or candidate it will set to follower
             self.logger.info(f'Accepted heartbeat for term {sender_term}')
             self.__log.revert_to_follower(sender_term, sender_serverId)
-            return config.RESPONSE_CODE_OK, self.__log.get_term(), self.__log.get_leader()
+            return config.RESPONSE_CODE_OK, sender_term, self.__log.get_leader()
         
         else:
             # return the leader ID we have to the peer sending heartbeat, so it can 
             # update its own leader id since it will revert to follower.
-            my_term = self.__log.get_term()
-            self.logger.info(f'Rejected heartbeat for term: {sender_term}, current term: {my_term}')
-            return config.RESPONSE_CODE_REJECT, my_term, self.__log.get_leader()
+            self.logger.info(f'Rejected heartbeat for term: {sender_term}, current term: {follower_term}')
+            return config.RESPONSE_CODE_REJECT, follower_term, self.__log.get_leader()
 
 
     def request_votes(self):
