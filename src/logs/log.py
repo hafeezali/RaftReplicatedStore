@@ -184,13 +184,13 @@ class Log:
 			self.config_change['last_commit_idx'] = True
 
 	def get_log_idx(self):
-		self.logger.info("Get log idx")
+		# self.logger.info("Get log idx")
 
 		with self.lock:
 			return self.log_idx
 
 	def get_term(self):
-		self.logger.info("Get term")
+		# self.logger.info("Get term")
 
 		with self.lock:
 			return self.term
@@ -238,7 +238,7 @@ class Log:
 			time.sleep(100/1000)
 
 	def get(self, index):
-		self.logger.info("Get")
+		# self.logger.info("Get")
 
 		return self.log[index]
 
@@ -273,7 +273,7 @@ class Log:
 		return index <= self.last_applied_idx
 
 	def get_leader(self):
-		self.logger.info("Get leader")
+		# self.logger.info("Get leader")
 
 		with self.lock:
 			return self.leader_id
@@ -293,7 +293,7 @@ class Log:
 		self.config_change['status'] = True
 
 	def get_status(self):
-		self.logger.info("Get status")
+		# self.logger.info("Get status")
 
 		return self.status
 	
@@ -307,7 +307,7 @@ class Log:
 		self.config_change['term'] = True
 
 	def set_self_leader(self):
-		self.logger.info("Set self leader")
+		self.logger.info("Set self leader - wooooooooooooooohoooooooooooooooooooo")
 
 		with self.lock:
 			self.status = STATE['LEADER']
@@ -316,13 +316,20 @@ class Log:
 		self.config_change['leader_id'] = True
 
 	def revert_to_follower(self, new_term, new_leader_id):
-		self.logger.info("Revert to follower")
-
+		
 		with self.lock:
 			if self.status == STATE['CANDIDATE'] or self.status == STATE['LEADER']:
+				self.logger.info(f'Reverting to follower from {self.status}')
 				self.status = STATE['FOLLOWER']
+			
+			if self.term != new_term:
+				self.logger.info(f'Updating term from {self.term} to {new_term}')
+			if self.leader_id != new_leader_id:
+				self.logger.info(f'Updating leader id from {self.leader_id} to {new_leader_id}')
+	
 			self.term = new_term
 			self.leader_id = new_leader_id
+
 		self.config_change['status'] = True
 		self.config_change['leader_id'] = True
 		self.config_change['term'] = True
