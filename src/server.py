@@ -3,6 +3,7 @@ from raft.consensus import Consensus
 from concurrent import futures
 from store.database import Database
 from logs.log import Log
+import os
 
 import grpc
 import protos.raftdb_pb2 as raftdb
@@ -10,14 +11,11 @@ import protos.raftdb_pb2_grpc as raftdb_grpc
 
 class Server(raftdb_grpc.ClientServicer):
 
-	def __init__(self, type, server_id, client_port, raft_port, peer_list):
+	def __init__(self, type, server_id, peer_list):
 		self.store = Database(type='memory', server_id='server_1')
 		# who updates state? does this need be here or in election layer?
-		self.state = STATE['FOLLOWER']
 		self.log = Log(server_id, self.store)
-		self.client_port = client_port
-		self.raft_port = raft_port
-		self.consensus = Consensus(peers=peer_list, self.store, self.log)
+		self.consensus = Consensus(peers=peer_list, store=self.store, log = self.log, server_id = server_id)
 
 	def Get(self, request, context):
 		# Implement leader check logic
@@ -38,17 +36,18 @@ class Server(raftdb_grpc.ClientServicer):
 def serve(server):
 	port = '50051'
 	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-	raftdb_grpc.add_ClientServicer_to_server(, server)
+	raftdb_grpc.add_ClientServicer_to_server(raftdb_grpc.ClientServicer, server)
 	server.add_insecure_port('[::]:' + port)
 	server.start()
 	server.wait_for_termination()
 
 if __name__ == '__main__':
 	# Implement arg parse to read server arguments
-	type = 'memory'
-	server_id = 'server_1'
-	client_port = '50051'
-	raft_port = '50052'
+	# type = 'memory'
+	# server_id = 'server_1'
+	# client_port = '50051'
+	# raft_port = '50052'
 
-	Server server = Server(type, server_id, client_port, raft_port)
+	# server = Server(type, server_id, peer_list={'50052','50052'})
+	server = Server(type=os.getenv('TYPE'), server_id = os.getenv('SERVERID'),peer_list=os.getenv('PEERS'))
 	serve(server)
