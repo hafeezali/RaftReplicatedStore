@@ -3,7 +3,7 @@ from raft.consensus import Consensus
 from concurrent import futures
 from store.database import Database
 from logs.log import Log
-
+from raft.config import STATE
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
@@ -17,7 +17,7 @@ class Server(raftdb_grpc.ClientServicer):
 		self.log = Log(server_id, self.store)
 		self.client_port = client_port
 		self.raft_port = raft_port
-		self.consensus = Consensus(peers=peer_list, self.store, self.log)
+		self.consensus = Consensus(peer_list, self.store, self.log)
 
 	def Get(self, request, context):
 		# Implement leader check logic
@@ -38,7 +38,7 @@ class Server(raftdb_grpc.ClientServicer):
 def serve(server):
 	port = '50051'
 	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-	raftdb_grpc.add_ClientServicer_to_server(, server)
+	raftdb_grpc.add_ClientServicer_to_server(raftdb_grpc.ClientServicer, server) #### THERE WAS A MISSING PARAM NOT SURE WHAT IT SHOULD BE
 	server.add_insecure_port('[::]:' + port)
 	server.start()
 	server.wait_for_termination()
@@ -50,5 +50,5 @@ if __name__ == '__main__':
 	client_port = '50051'
 	raft_port = '50052'
 
-	Server server = Server(type, server_id, client_port, raft_port)
+	server = Server(type, server_id, client_port, raft_port)
 	serve(server)
