@@ -122,19 +122,28 @@ class Election(raftdb_grpc.RaftElectionService):
             start = time.time()
             
             while self.__log.get_term() == term and self.__log.get_status() == config.STATE['LEADER']:
-                response = stub.Heartbeat(request)
-                if response.code != config.RESPONSE_CODE_OK:
-                # In what scenario can we get a code != 200? Is there a timeout on these rpcs? What if the node is down? Due to membership change or just node crash for extended duration? 
-                # Need heartbeat response from append entries, added term proto to be sent back
-                    if response.term > self.__log.get_term():
-                        # We are not the most up to date term, revert to follower
-                        # Our heartbeat was rejected, so update leader ID to current leader
-                        self.__log.revert_to_follower(response.term, response.leaderId)
-                        break
-                else:
-                    # We got an OK response, sleep for sometime and then send heartbeat again
-                    wait_time = time.time() - start
-                    time.sleep((config.HB_TIME - wait_time) / 1000)
+                try:
+                    response = stub.Heartbeat(request, timeout=config.RPC_TIMEOUT)
+                    if response.code != config.RESPONSE_CODE_OK:
+                    # In what scenario can we get a code != 200? Is there a timeout on these rpcs? What if the node is down? Due to membership change or just node crash for extended duration? 
+                    # Need heartbeat response from append entries, added term proto to be sent back
+                        if response.term > self.__log.get_term():
+                            # We are not the most up to date term, revert to follower
+                            # Our heartbeat was rejected, so update leader ID to current leader
+                            self.__log.revert_to_follower(response.term, response.leaderId)
+                            break
+                    else:
+                        # We got an OK response, sleep for sometime and then send heartbeat again
+                        wait_time = time.time() - start
+                        time.sleep((config.HB_TIME - wait_time) / 1000)
+
+                except grpc.RpcError as e:
+                    status_code = e.code()
+                    status_code.value
+                    if status_code.value == grpc.StatusCode.DEADLINE_EXCEEDED:
+                        # timeout, will retry if we are still leader
+                        self.logger.debug(f'Election - SendHeartbeat: Failed with timeout error, leader: {self.serverId}, peer: {follower}, details: {e.details()}')
+
 
 
     # Heartbeat RPC Handler
@@ -190,18 +199,28 @@ class Election(raftdb_grpc.RaftElectionService):
 
             with grpc.insecure_channel(voter) as channel:
                 stub = raftdb_grpc.RaftStub(channel)
-                vote_response = stub.RequestVote(request)
-                
-                # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?
-                if vote_response:
-                    vote = vote_response.success
-                    if vote == True and self.__log.get_status() == config.STATE['CANDIDATE']:
-                        self.update_votes()
-                    elif not vote:
-                        voter_term = vote_response.term
-                        if voter_term > self.__log.get_term():
-                            self.__log.revert_to_follower(voter_term, vote_response.leaderId)
-                    break
+
+                try: 
+                    vote_response = stub.RequestVote(request, timeout=config.RPC_TIMEOUT)
+                    
+                    # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?
+                    if vote_response:
+                        vote = vote_response.success
+                        if vote == True and self.__log.get_status() == config.STATE['CANDIDATE']:
+                            self.update_votes()
+                        elif not vote:
+                            voter_term = vote_response.term
+                            if voter_term > self.__log.get_term():
+                                self.__log.revert_to_follower(voter_term, vote_response.leaderId)
+                        break
+
+                except grpc.RpcError as e:
+                    status_code = e.code()
+                    status_code.value
+                    if status_code.value == grpc.StatusCode.DEADLINE_EXCEEDED:
+                        # timeout, will retry if we are still leader
+                        self.logger.debug(f'Election - RequestVote: Failed with timeout error, leader: {self.serverId}, peer: {voter}, details: {e.details()}')
+
 
     # where is the RequestVode handler?
     # RPC Request Vote Handler
