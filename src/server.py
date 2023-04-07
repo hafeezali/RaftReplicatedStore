@@ -15,6 +15,7 @@ class Server(raftdb_grpc.ClientServicer):
 
     def __init__(self, type, server_id, peer_list):
         self.store = Database(type=type, server_id=server_id)
+        self.server_id = server_id
         # who updates state? does this need be here or in election layer?
         self.logger = Logging(server_id).get_logger()
         self.log = Log(server_id, self.store, self.logger)
@@ -28,18 +29,32 @@ class Server(raftdb_grpc.ClientServicer):
     def Get(self, request, context):
         # Implement leader check logic
         # Make sure this is strongly consistent -- if we allow only one outstanding client request, the system must be strongly consistent by default
-        return raftdb.GetResponse(code = 200, value = self.store.get(request.key))
+        
+        leader_id = self.log.get_leader()
+
+        if leader_id == self.server_id:
+            return raftdb.GetResponse(code = 200, value = self.store.get(request.key), leaderId = leader_id)
+        else:
+            return raftdb.GetResponse(code = 300, value = None, leaderId = leader_id)
+ 
 
     def Put(self, request, context):
         # Implement leader check logic
         # What happens when we dont get majority? Retry or fail? -- Im guessing fail and respond to client
         # can i not just directly pass request to command?
         # now the request also includes client id and sequence number
-        if self.consensus.handlePut(request) == 'OK':
-            return raftdb.PutResponse(code = 200)
-        else :
-            # add more appropriate error message
-            return raftdb.PutResponse(code = 500)
+
+        leader_id = self.log.get_leader()
+
+        if leader_id == self.server_id:
+            if self.consensus.handlePut(request) == 'OK':
+                return raftdb.PutResponse(code = 200, leaderId = leader_id)
+            else:
+                # add more appropriate error message
+                return raftdb.PutResponse(code = 500, leaderId = leader_id)
+        else:
+            return raftdb.PutResponse(code = 300, leaderId = leader_id)
+        
 
 def start_server_thread(port, grpc_server):
     grpc_server.add_insecure_port('[::]:' + port)

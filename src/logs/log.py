@@ -223,13 +223,13 @@ class Log:
 		self.logger.info("Commit done")
 
 	def get_log_idx(self):
-		self.logger.info("Get log idx")
+		# self.logger.info("Get log idx")
 
 		with self.lock:
 			return self.log_idx
 
 	def get_term(self):
-		self.logger.info("Get term")
+		# self.logger.info("Get term")
 
 		with self.lock:
 			return self.term
@@ -263,16 +263,16 @@ class Log:
 	This will be called by thread periodically to apply log entries to the database
 	'''
 	def apply(self):
-		self.logger.info("Apply called")
+		# self.logger.info("Apply called")
 
 		while True:
 			with self.lock:
-				self.logger.info("Apply started")
-				self.logger.info("Log size before: " + str(len(self.log)))
+				# self.logger.info("Apply started")
+				# self.logger.info("Log size before: " + str(len(self.log)))
 				c_idx = self.last_commit_idx
 				idx = self.last_applied_idx + 1
-				self.logger.info("Last commit idx: " + str(c_idx))
-				self.logger.info("Starting apply index: " + str(idx))
+				# self.logger.info("Last commit idx: " + str(c_idx))
+				# self.logger.info("Starting apply index: " + str(idx))
 				while idx <= c_idx:
 					flush_res = self.flush(idx)
 					if flush_res:
@@ -289,12 +289,12 @@ class Log:
 						self.config_change['last_applied_command_per_client'] = True
 					else:
 						break
-				self.logger.info("Ending apply index: " + str(idx))
-			self.logger.info("Apply done. Going to sleep")
+				# self.logger.info("Ending apply index: " + str(idx))
+			# self.logger.info("Apply done. Going to sleep")
 			time.sleep(100/1000)
 
 	def get(self, index):
-		self.logger.info("Get at index: " + str(index))
+		# self.logger.info("Get at index: " + str(index))
 
 		return self.log[index]
 
@@ -332,7 +332,7 @@ class Log:
 		return index <= self.last_applied_idx
 
 	def get_leader(self):
-		self.logger.info("Get leader")
+		# self.logger.info("Get leader")
 
 		with self.lock:
 			return self.leader_id
@@ -356,7 +356,7 @@ class Log:
 		self.logger.info("Update status done")
 
 	def get_status(self):
-		self.logger.info("Get status")
+		# self.logger.info("Get status")
 
 		return self.status
 	
@@ -397,7 +397,7 @@ class Log:
 		self.logger.info("Revert to follower done")
 
 	def get_voted_for(self):
-		self.logger.info("Get vorted for")
+		# self.logger.info("Get vorted for")
 
 		return self.voted_for['term'], self.voted_for['server_id']
 	

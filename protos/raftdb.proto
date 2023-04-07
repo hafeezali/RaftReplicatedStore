@@ -28,12 +28,12 @@ message PutRequest {
 message GetResponse {
 	int32 code = 1;
 	int32 value = 2;
-	string leader_id = 3;
+	string leaderId = 3;
 }
 
 message PutResponse {
 	int32 code = 1;
-	string leader_id = 2;
+	string leaderId = 2;
 }
 
 message HeartbeatRequest {

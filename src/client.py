@@ -1,7 +1,7 @@
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
-from raft.config import RESPONSE_CODE_REDIRECT
+import raft.config as config
 
 peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:50053', 'server-3': 'localhost:50055'}
 
@@ -21,8 +21,8 @@ class Client:
 				request = raftdb.GetRequest(key=key)
 				response = stub.Get(request)
 
-				if response.code == RESPONSE_CODE_REDIRECT:
-					self.redirectToLeader(response.leader_id)
+				if response.code == config.RESPONSE_CODE_REDIRECT:
+					self.redirectToLeader(response.leaderId)
 				else:
 					print(response.value)
 					break
@@ -35,10 +35,18 @@ class Client:
 				request = raftdb.PutRequest(key=key, value=value, clientid = clientid,sequence_number = sequence_number )
 				response = stub.Put(request)
 
-				if response.code == RESPONSE_CODE_REDIRECT:
-					self.redirectToLeader(response.leader_id)
-				else:
+				if response.code == config.RESPONSE_CODE_REDIRECT:
+					self.redirectToLeader(response.leaderId)
+					# Then code will retry automatically
+
+				elif response.code == config.RESPONSE_CODE_OK:
 					print(f"Put of key: {key}, value: {value} succeeded!\n")
+					break
+				elif response.code == config.RESPONSE_CODE_REJECT:
+					print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
+					break
+				else:
+					print("Something went wrong, exiting put method\n")
 					break
 
 
