@@ -188,6 +188,11 @@ class Log:
 
 		with self.lock:
 			return self.log_idx
+		
+	def get_last_commit_index(self):
+
+		with self.lock:
+			return self.last_commit_idx
 
 	def get_term(self):
 		# self.logger.info("Get term")

@@ -47,23 +47,25 @@ def start_server_thread(port, grpc_server):
     grpc_server.wait_for_termination()
 
 def serve(server):
-    # client_port = '50051'
+    client_port = '50051'
     peer_port = '50052'
     
-    # grpc_client_server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
-    # raftdb_grpc.add_ClientServicer_to_server(server, grpc_client_server)
+    grpc_client_server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
+    raftdb_grpc.add_ClientServicer_to_server(server, grpc_client_server)
 
     grpc_peer_server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
-    if server.election is not None:
-        print("We have election object woohoo")
     raftdb_grpc.add_RaftElectionServiceServicer_to_server(server.election, grpc_peer_server)
-    # raftdb_grpc.add_ConsensusServicer_to_server(server.consensus, grpc_peer_server)
+    raftdb_grpc.add_ConsensusServicer_to_server(server.consensus, grpc_peer_server)
     
+    print("Starting threads for grpc servers to serve the client and other peers")
+    client_thread = Thread(target=start_server_thread, args=(client_port, grpc_client_server, ))
+    peer_thread = Thread(target=start_server_thread, args=(peer_port, grpc_peer_server, ))
+    
+    client_thread.start()
+    peer_thread.start()
 
-    # Thread(target=start_server_thread, args=(client_port, grpc_client_server, )).start()
-    election_thread = Thread(target=start_server_thread, args=(peer_port, grpc_peer_server, ))
-    election_thread.start()
-    election_thread.join()
+    client_thread.join()
+    peer_thread.join()
 
 if __name__ == '__main__':
     # Implement arg parse to read server arguments
@@ -72,6 +74,10 @@ if __name__ == '__main__':
     # client_port = '50051'
     # raft_port = '50052'
 
+    server_id = os.getenv('SERVERID')
+    print(f"Starting Server {server_id}")
+    
     peer_list = peer_list=os.getenv('PEERS').split(',')
-    server = Server(type=os.getenv('TYPE'), server_id = os.getenv('SERVERID'),peer_list=peer_list)
+    server = Server(type=os.getenv('TYPE'), server_id=server_id, peer_list=peer_list)
+    
     serve(server)
