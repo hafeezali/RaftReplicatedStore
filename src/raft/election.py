@@ -147,7 +147,8 @@ class Election(raftdb_grpc.RaftElectionService):
                     else:
                         # We got an OK response, sleep for sometime and then send heartbeat again
                         wait_time = time.time() - start
-                        time.sleep((config.HB_TIME - wait_time) / 1000)
+                        if config.HB_TIME > wait_time:
+                            time.sleep((config.HB_TIME - wait_time) / 1000)
 
                 except grpc.RpcError as e:
                     status_code = e.code()

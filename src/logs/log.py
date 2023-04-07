@@ -439,7 +439,10 @@ class Log:
 		self.logger.info("Get last committed sequence for")
 
 		with self.lock:
-			return self.last_applied_command_per_client[client_id]
+			if client_id in self.last_applied_command_per_client:
+				return self.last_applied_command_per_client[client_id]
+			else:
+				return -1
 
 	def clear(self):
 		self.logger.info("clear")

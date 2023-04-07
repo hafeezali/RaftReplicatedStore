@@ -28,9 +28,9 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
     def handlePut(self,entry):
         self.logger.debug(f'Handling the put request for client id - {entry.clientid} and sequence number - {entry.sequence_number}')    
         # case where the leader fails, checks if already applied to the state machine
-        last_committed_entry = self.__log.lastCommittedEntry(entry.clientid)
+        last_committed_seq = self.__log.get_last_committed_sequence_for(entry.clientid)
 
-        if last_committed_entry!= -1 and last_committed_entry.sequence_number == entry.sequence_number:
+        if last_committed_seq == entry.sequence_number:
             self.logger.debug(f'The request has already been executed.')
             return 'OK'
 
