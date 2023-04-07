@@ -61,3 +61,13 @@ implement timeouts for Client request RPCs
 scenario - client has sent a request, server adds to log, but before it can get majority and commit the entry, 
 it has to step down as leader. So now the client has to timeout and retry, and will realize that the server it
 was talking to is no longer the leader. So the client should retry the request with the new leader.
+
+
+## Running docker:
+
+To start:
+docker build -t kvstore -f Dockerfile .    
+docker compose -f docker-compose.yaml up -d
+
+To stop:
+docker-compose down --remove-orphans

@@ -201,7 +201,7 @@ class Log:
 						self.config_change[key] = False
 
 			config_file.close()
-			self.logger.info("Flush config sleeping")
+			# self.logger.info("Flush config sleeping")
 			time.sleep(100/1000)
 
 	'''
@@ -221,20 +221,24 @@ class Log:
 		self.logger.info("Commit done")
 
 	def get_log_idx(self):
-		# self.logger.info("Get log idx")
+		self.logger.debug("Get log idx")
 
 		with self.lock:
+			self.logger.debug("Got the lock for idx")
 			return self.log_idx
 		
+		
 	def get_last_commit_index(self):
-
+		self.logger.debug("Get last commit idx")
 		with self.lock:
+			self.logger.debug("Got the lock for commit idx")
 			return self.last_commit_idx
 
 	def get_term(self):
 		# self.logger.info("Get term")
-
+		self.logger.debug("Get term")
 		with self.lock:
+			self.logger.debug("Got the lock for term")
 			return self.term
 
 	def update_term(self, term):
@@ -419,7 +423,7 @@ class Log:
 
 		with self.lock:
 			self.term = candidate_term
-			self.voted_for['term'] = candidate_id
+			self.voted_for['term'] = candidate_term
 			self.voted_for['server_id'] = candidate_id
 		self.config_change['term'] = True
 		self.config_change['voted_for'] = True

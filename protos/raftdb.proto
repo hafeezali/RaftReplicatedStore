@@ -49,19 +49,18 @@ message HeartbeatResponse {
 
 message LogEntry {
 
-	message Entry {
-		int32 key = 1;
-		int32 value = 2;
-		int32 clientid = 3;
-	    int32 sequence_number = 4;
-	}
+	
+	int32 key = 1;
+	int32 value = 2;
+	int32 clientid = 3;
+	int32 sequence_number = 4;
+	
 
-	int32 term = 1;
-	int32 logIndex = 2;
-	int32 prev_term = 3;
-	int32 prev_log_index = 4;
-	int32 lastCommitIndex = 5;
-	Entry entry = 6;
+	int32 term = 5;
+	int32 logIndex = 6;
+	int32 prev_term = 7;
+	int32 prev_log_index = 8;
+	int32 lastCommitIndex = 9;
 }
 
 message LogEntryResponse {

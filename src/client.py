@@ -23,12 +23,12 @@ class Client:
 				request = raftdb.GetRequest(key=key)
 
 				try:
-					response = stub.Get(request, timeout=config.RPC_TIMEOUT)
+					response = stub.Get(request, timeout=100)
 
 					leader_id = response.leaderId
 
 					if response.code == config.RESPONSE_CODE_REDIRECT:
-
+						print(f"REDIRECT - {leader_id}")
 						if leader_id == None or leader_id == '':
 							time.sleep(config.CLIENT_SLEEP_TIME)
 						else:
@@ -85,8 +85,6 @@ class Client:
 					if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                         # timeout, will retry if we are still leader
 						print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
-					else:
-						self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
 
 
 
