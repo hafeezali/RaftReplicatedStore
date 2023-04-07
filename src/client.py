@@ -1,39 +1,87 @@
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
+import raft.config as config
+import time
+
+peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:50053', 'server-3': 'localhost:50055'}
 
 class Client:
 
 	def __init__(self):
 		self.server_addr = 'localhost:50051'
 
+	def redirectToLeader(self, leader_id):
+		print(leader_id)
+		self.server_addr = peer_list_mappings[leader_id]
+
 	def requestGet(self, key):
 		# implement server update logic
-		with grpc.insecure_channel(self.server_addr) as channel:
-			stub = raftdb_grpc.ClientStub(channel)
-			request = raftdb.GetRequest(key=key)
-			response = stub.Get(request)
-			print(response.value)
+		while True:
+			with grpc.insecure_channel(self.server_addr) as channel:
+				stub = raftdb_grpc.ClientStub(channel)
+				request = raftdb.GetRequest(key=key)
+				response = stub.Get(request)
+
+				leader_id = response.leaderId
+
+				if response.code == config.RESPONSE_CODE_REDIRECT:
+
+					if leader_id == None or leader_id == '':
+						time.sleep(config.CLIENT_SLEEP_TIME)
+					else:
+						self.redirectToLeader(response.leaderId.replace("'", ""))
+
+				elif response.code == config.RESPONSE_CODE_OK:
+					print(f"GET for key: {key} Succeeded, value: {response.value}\n")
+					# print(response.value)
+					break
+				else:
+					print("Something went wrong, exiting put method\n")
+					break
+
 
 	def requestPut(self, key, value, clientid, sequence_number):
 		# implement server update logic
-		with grpc.insecure_channel(self.server_addr) as channel:
-			stub = raftdb_grpc.ClientStub(channel)
-			request = raftdb.PutRequest(key=key, value=value, clientid = clientid,sequence_number = sequence_number )
-			response = stub.Put(request)
+		while True:
+			with grpc.insecure_channel(self.server_addr) as channel:
+				stub = raftdb_grpc.ClientStub(channel)
+				request = raftdb.PutRequest(key=key, value=value, clientid = clientid,sequence_number = sequence_number )
+				response = stub.Put(request)
+
+				leader_id = response.leaderId
+
+				if response.code == config.RESPONSE_CODE_REDIRECT:
+					if leader_id == None or leader_id == '':
+						time.sleep(config.CLIENT_SLEEP_TIME)
+					else:
+						self.redirectToLeader(response.leaderId.replace("'", ""))
+						# Then code will retry automatically
+
+				elif response.code == config.RESPONSE_CODE_OK:
+					print(f"Put of key: {key}, value: {value} succeeded!\n")
+					break
+				elif response.code == config.RESPONSE_CODE_REJECT:
+					print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
+					break
+				else:
+					print("Something went wrong, exiting put method\n")
+					break
+
 
 if __name__ == '__main__':
 	client = Client()
 	while True:
-		reqType = int(input("Enter 1 to get and 2 to put\n"))
+		reqType = int(input("Options - Get: 1, Put: 2, Quit: 3\n"))
 		if reqType == 1:
 			key = int(input("Enter key\n"))
 			client.requestGet(key)
 		elif reqType == 2:
-			key = int(input("Enter key\n"))
-			value = int(input("Enter value\n"))
-			clientid = int(input("Enter clientid\n"))
-			sequence_number = int(input("Enter seq_number\n"))
-			client.requestPut(key, value, clientid, sequence_number)
+			num = 4
+			inputs = list(map(int, input("\nEnter key, value, clientid, seq_number [ex: 1 2 3 4]\n").strip().split()))[:num]
+			client.requestPut(*inputs)
+		elif reqType == 3:
+			print("SEEEE YAAA\n")
+			break
 		else:
 			print("Invalid input\n")

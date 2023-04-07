@@ -27,10 +27,10 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
     # why are we calling it command instead of entry?
     def handlePut(self,entry):
         self.logger.debug(f'Handling the put request for client id - {entry.clientid} and sequence number - {entry.sequence_number}')    
-    # case where the leader fails, checks if already applied to the state machine
-        last_committed_entry = self.__log.lastCommittedEntry(entry.clientid)
+        # case where the leader fails, checks if already applied to the state machine
+        last_committed_seq = self.__log.get_last_committed_sequence_for(entry.clientid)
 
-        if last_committed_entry!= -1 and last_committed_entry.sequence_number == entry.sequence_number:
+        if last_committed_seq == entry.sequence_number:
             self.logger.debug(f'The request has already been executed.')
             return 'OK'
 
@@ -86,7 +86,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
     # Proably wanna rename this to correct_follower_log and broadcast entry. And maybe split into two methods?
     def broadcastEntry(self, follower : str, entry, log_index_to_commit):
-        with grpc.insecure_channel(follower) as channel:
+        with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
             self.logger.debug(f'Broadcasting append entry to {follower}')
             stub = raftdb_grpc.ConsensusStub(channel)
             prev_log_index = log_index_to_commit - 1

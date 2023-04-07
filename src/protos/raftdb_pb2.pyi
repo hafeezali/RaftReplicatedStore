@@ -11,12 +11,14 @@ class GetRequest(_message.Message):
     def __init__(self, key: _Optional[int] = ...) -> None: ...
 
 class GetResponse(_message.Message):
-    __slots__ = ["code", "value"]
+    __slots__ = ["code", "leaderId", "value"]
     CODE_FIELD_NUMBER: _ClassVar[int]
+    LEADERID_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]
     code: int
+    leaderId: str
     value: int
-    def __init__(self, code: _Optional[int] = ..., value: _Optional[int] = ...) -> None: ...
+    def __init__(self, code: _Optional[int] = ..., value: _Optional[int] = ..., leaderId: _Optional[str] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
     __slots__ = ["serverId", "term"]
@@ -84,10 +86,12 @@ class PutRequest(_message.Message):
     def __init__(self, key: _Optional[int] = ..., value: _Optional[int] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ...) -> None: ...
 
 class PutResponse(_message.Message):
-    __slots__ = ["code"]
+    __slots__ = ["code", "leaderId"]
     CODE_FIELD_NUMBER: _ClassVar[int]
+    LEADERID_FIELD_NUMBER: _ClassVar[int]
     code: int
-    def __init__(self, code: _Optional[int] = ...) -> None: ...
+    leaderId: str
+    def __init__(self, code: _Optional[int] = ..., leaderId: _Optional[str] = ...) -> None: ...
 
 class VoteRequest(_message.Message):
     __slots__ = ["candidateId", "lastLogIndex", "lastLogTerm", "term"]

@@ -2,12 +2,12 @@
 
 ## Installation:
 
-python -m pip install grpcio
-python -m pip install grpcio-tools
+python3 -m pip install grpcio
+python3 -m pip install grpcio-tools
 
 ## Generating gRPC code:
 
-python -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./src/protos --grpc_python_out=./src/protos ./protos/raftdb.proto
+python3 -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./src/protos --grpc_python_out=./src/protos ./protos/raftdb.proto
 
 ## Open issues:
 
@@ -53,3 +53,11 @@ Database details
 
 
 Add pics of protos and algos from the slides here
+
+
+TODO ONE MORE THING
+
+implement timeouts for Client request RPCs
+scenario - client has sent a request, server adds to log, but before it can get majority and commit the entry, 
+it has to step down as leader. So now the client has to timeout and retry, and will realize that the server it
+was talking to is no longer the leader. So the client should retry the request with the new leader.
