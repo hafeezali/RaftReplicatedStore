@@ -18,6 +18,10 @@ class Database:
 		
 	def get(self, key):
 		return self.db.get(key)
+		## Should we add a try catch?? What do we return if the key is not present
+		## Does it throw a key error?
 
 	def put(self, key, value):
 		self.db.put(key, value)
+
+		## Should this return true/false????

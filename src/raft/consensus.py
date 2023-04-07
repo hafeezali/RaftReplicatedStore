@@ -15,7 +15,7 @@ import time
 class Consensus(raftdb_grpc.ConsensusServicer) :
 
 
-    def __init__(self, peers: list, store, log, logger, server_id):
+    def __init__(self, peers: list, log, logger):
         self.__peers = peers
         self.__log = log
         self.lock = Lock()
@@ -26,11 +26,12 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
     
     # why are we calling it command instead of entry?
     def handlePut(self,entry):
-        
-    # case where the leader fails, checks if already applied to the state machine
-        last_committed_entry = self.__log.lastCommittedEntry(entry.clientid)
+        self.logger.debug(f'Handling the put request for client id - {entry.clientid} and sequence number - {entry.sequence_number}')    
+        # case where the leader fails, checks if already applied to the state machine
+        last_committed_seq = self.__log.get_last_committed_sequence_for(entry.clientid)
 
-        if last_committed_entry!= -1 and last_committed_entry.sequence_number == entry.sequence_number:
+        if last_committed_seq == entry.sequence_number:
+            self.logger.debug(f'The request has already been executed.')
             return 'OK'
 
         key = (entry.clientid, entry.sequence_number)
@@ -38,7 +39,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             self.counter[key] = 0
             self.commit_done[key] = 0
         # probably get the index in the log when appending to use when committing later
-        
+        self.logger.debug(f'Appending the entry to log of {self.__log.server_id}')
         log_index_to_commit = self.__log.append({'key' : entry.key,
                             'value' : entry.value,
                             'term' : self.__log.get_term(),
@@ -54,17 +55,19 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                 )
               
             # when do the executors start? on submit? If so, the append entries aren't sent in parallel
+            self.logger.debug('Broadcasting append entries')
             
             while self.commit_done[key] != 1 :
                 time.sleep(100)
                 print("waiting for commit") 
 
             self.commit_done.pop(key)
+            self.logger.debug(f'Committing the entry {entry}')
             self.__log.commit(log_index_to_commit)
             while self.__log.is_applied(log_index_to_commit) :
                 time.sleep(100)
                 print("waiting to go to db")
-
+            self.logger.debug(f'Applying the entry {entry} to the state machine')
             return 'OK'
 
     def create_log_entry_request(self, prev_log_index, entry):
@@ -83,23 +86,27 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
     # Proably wanna rename this to correct_follower_log and broadcast entry. And maybe split into two methods?
     def broadcastEntry(self, follower : str, entry, log_index_to_commit):
-        with grpc.insecure_channel(follower) as channel:
+        with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
+            self.logger.debug(f'Broadcasting append entry to {follower}')
             stub = raftdb_grpc.ConsensusStub(channel)
             prev_log_index = log_index_to_commit - 1
             request = self.create_log_entry_request(prev_log_index, entry)
             response = stub.AppendEntries(request)
             
             if response.code == 500 and response.term > self.__log.get_term() :
+                self.logger.debug('There is a server with larger term, updating term and status')
                 self.__log.update_status(config.STATE.CANDIDATE)
                 self.__log.update_term(response.term)
 
             else :
                 while response.code != 200 :
+                    self.logger.debug('The entry is not matching the server log')
                     prev_log_index = prev_log_index - 1
                     request = self.create_log_entry_request(prev_log_index, entry)
                     response = stub.AppendEntries(request)
 
                 while prev_log_index < log_index_to_commit - 1:
+                    self.logger.debug('Inserting correct entry in the server log')
                     prev_log_index = prev_log_index + 1
                     request = request = self.create_log_entry_request(prev_log_index, entry)
                     response = stub.AppendEntries(request)
@@ -109,8 +116,10 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             with self.lock :
                 self.counter[key] += 1
                 if self.counter[key] >= majority and key in self.commit_done:
+                    self.logger.debug('Majority - wuhooooyayyyyy')
                     self.commit_done[key] = 1
                 if self.counter[key] == len(self.__peers) :
+                    self.logger.debug(f'All the peers have {key} in their log, noicee')
                     self.counter.pop(key)
             
 
@@ -118,10 +127,12 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         # If previous term and log index for request matches the last entry in log, append
         # Else, return error. Leader will decrement next index for replica and retry
         if request.term < self.__log.get_term() :
+            self.logger.debug('I am the appendEntry handler, my term is greater than the server term')
             return raftdb.LogEntryResponse(code=500, term = self.__log.get_term())
             
         if request.prev_term == -1 and request.prev_log_index == -1:
             # delete follower log if master log is empty
+            self.logger.debug('Nothing in master log, clearing follower log and adding first entry')
             self.__log.clear()
 
             self.__log.append({'key' : request.Entry.key,
@@ -135,6 +146,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         # What happens when the node is participating in an election and it receives an appendEntries rpc? Maybe this happens due to a network partition for heartbeat timeout period?? Guess this is handled because the node after casting a vote updates it's term? need to check this
         # random bs above 
         elif self.log.get_log_idx() >= request.prev_log_index and self.log.get(request.prev_log_index).term == request.prev_term : 
+            self.logger.debug(f'Previous entry matches in the log for key - {request.Entry.key} and value - {request.Entry.value}')
             value = {'key' : request.Entry.key,
                                 'value' :request.Entry.value,
                                 'term' : request.term,
@@ -144,6 +156,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             self.__log.commit_upto(request.lastCommitIndex)   
             return raftdb.LogEntryResponse(code=200, term = self.__log.get_term()) 
         else:
+            self.logger.debug(f'Previous entry does not match in the log for key - {request.Entry.key} and value - {request.Entry.value}')
             return raftdb.LogEntryResponse(code=500, term = self.__log.get_term())
 
 

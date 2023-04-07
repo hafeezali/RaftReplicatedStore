@@ -32,8 +32,8 @@ class Election(raftdb_grpc.RaftElectionService):
         '''
         Once the election timeout has passed, this function starts the leader election
         '''
-        self.logger.debug(f'Starting a new election for term {self.__log.get_term()}')
         self.__log.set_self_candidate()
+        self.logger.debug(f'Starting a new election for term {self.__log.get_term()}')
         self.num_votes = 0
         
         # Calculate majority
@@ -122,7 +122,7 @@ class Election(raftdb_grpc.RaftElectionService):
         # To send heartbeats
         term = self.__log.get_term()
         self.logger.info(f'Sending heartbeat for term {term} to {follower}')
-        with grpc.insecure_channel(follower) as channel:
+        with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
             stub = raftdb_grpc.RaftElectionServiceStub(channel)
             request = raftdb.HeartbeatRequest(
                 term = term,
@@ -133,6 +133,7 @@ class Election(raftdb_grpc.RaftElectionService):
             while self.__log.get_term() == term and self.__log.get_status() == config.STATE['LEADER']:
                 try:
                     response = stub.Heartbeat(request, timeout=config.RPC_TIMEOUT)
+
                     if response.code != config.RESPONSE_CODE_OK:
                     # In what scenario can we get a code != 200? Is there a timeout on these rpcs? What if the node is down? Due to membership change or just node crash for extended duration? 
                     # Need heartbeat response from append entries, added term proto to be sent back
@@ -145,14 +146,17 @@ class Election(raftdb_grpc.RaftElectionService):
                     else:
                         # We got an OK response, sleep for sometime and then send heartbeat again
                         wait_time = time.time() - start
-                        time.sleep((config.HB_TIME - wait_time) / 1000)
+                        if config.HB_TIME > wait_time:
+                            time.sleep((config.HB_TIME - wait_time) / 1000)
 
                 except grpc.RpcError as e:
                     status_code = e.code()
-                    status_code.value
-                    if status_code.value == grpc.StatusCode.DEADLINE_EXCEEDED:
+                  
+                    if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                         # timeout, will retry if we are still leader
-                        self.logger.debug(f'Heartbeat failed with timeout error for peer: {follower}, details: {e.details()}')
+                        self.logger.debug(f'Heartbeat failed with timeout error, peer: {follower}, {status_code} details: {e.details()}')
+                    else :
+                        self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
 
 
 
@@ -169,26 +173,29 @@ class Election(raftdb_grpc.RaftElectionService):
         higher term in the system.
 
         '''
-        self.logger.info(f'Received heartbeat from leader for {sender_term}')
         follower_term = self.__log.get_term()
 
         sender_term, sender_serverId = request.term, request.serverId
+        self.logger.info(f'Received heartbeat from leader for term: {sender_term} from leader: {sender_serverId}')
         
         if follower_term <= sender_term:
             # Update our term to match sender term
             # Update leader ID so that we can redirect requests to the leader
 
             # If this server was leader or candidate it will set to follower
-            self.logger.info(f'Accepted heartbeat for term {sender_term}')
+            self.logger.info(f'Accepted heartbeat for term: {sender_term}')
             self.__log.revert_to_follower(sender_term, sender_serverId)
-            return config.RESPONSE_CODE_OK, sender_term, self.__log.get_leader()
+            return raftdb.HeartbeatResponse(code = config.RESPONSE_CODE_OK,
+                                            term = sender_term,
+                                            leaderId= self.__log.get_leader())
         
         else:
             # return the leader ID we have to the peer sending heartbeat, so it can 
             # update its own leader id since it will revert to follower.
             self.logger.info(f'Rejected heartbeat for term: {sender_term}, current term: {follower_term}')
-            return config.RESPONSE_CODE_REJECT, follower_term, self.__log.get_leader()
-
+            return raftdb.HeartbeatResponse(code = config.RESPONSE_CODE_REJECT,
+                                            term = follower_term,
+                                            leaderId= self.__log.get_leader())
 
     def request_votes(self):
         # Request votes from other nodes in the cluster.
@@ -206,25 +213,30 @@ class Election(raftdb_grpc.RaftElectionService):
 
         # get term of last item in log
         # can just do log.term -- current term -- different from last log term
-        if candidate_last_log_index == 0 : 
+        if candidate_last_log_index == -1 : 
             candidate_last_log_term = 0
-        else :
-            candidate_last_log_term = self.__log.get(candidate_last_log_index).term
+        else:
+            candidate_last_log_term = self.__log.get(candidate_last_log_index)['term']
         
-        request = raftdb.VoteRequest(term = candidate_term, 
-                                     lastLogTerm = candidate_last_log_term,
-                                     lastLogIndex = candidate_last_log_index,
-                                     candidateId = self.serverId)
+        
 
         while self.__log.get_status() == config.STATE['CANDIDATE'] and self.__log.get_term() == candidate_term:
             
             self.logger.info(f'Requesting vote for term: {term} from {voter}')
-            with grpc.insecure_channel(voter) as channel:
-                stub = raftdb_grpc.RaftElectionServiceStub(channel)
+            with grpc.insecure_channel(voter, options=(('grpc.enable_http_proxy', 0),)) as channel:
+                self.logger.info(f'Channel for term {term} to {voter}')
 
                 try: 
-                    vote_response = stub.RequestVote(request, timeout=config.RPC_TIMEOUT)
-                    
+                    stub = raftdb_grpc.RaftElectionServiceStub(channel)
+                    self.logger.info(f'Created stub for term {term} to {voter}, sending rpc')
+                    request = raftdb.VoteRequest(term = candidate_term, 
+                                     lastLogTerm = candidate_last_log_term,
+                                     lastLogIndex = candidate_last_log_index,
+                                     candidateId = self.serverId)
+                    # vote_response = stub.RequestVote(request, timeout = config.RPC_TIMEOUT)
+                    vote_response = stub.RequestVote(request)
+
+                    self.logger.info(f'Vote Response for term {term} is {vote_response}')
                     # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?
                     if vote_response:
                         vote = vote_response.success
@@ -237,14 +249,17 @@ class Election(raftdb_grpc.RaftElectionService):
                                 self.logger.info(f'Did not receive vote for term: {term} from {voter}, voter term: {voter_term}')
                                 self.__log.revert_to_follower(voter_term, vote_response.leaderId)
                         break
+                    else:
+                        self.logger.info(f'No vote response for term: {term} from {voter}')
 
                 except grpc.RpcError as e:
                     status_code = e.code()
-                    status_code.value
-                    if status_code.value == grpc.StatusCode.DEADLINE_EXCEEDED:
+                  
+                    if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                         # timeout, will retry if we are still leader
-                        self.logger.debug(f'Request vote failed with timeout error, peer: {voter}, details: {e.details()}')
-
+                        self.logger.debug(f'Request vote failed with timeout error, peer: {voter}, {status_code} details: {e.details()}')
+                    else :
+                        self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
 
     # where is the RequestVode handler?
     # RPC Request Vote Handler
@@ -271,25 +286,34 @@ class Election(raftdb_grpc.RaftElectionService):
         candidate_last_log_index = request.lastLogIndex
 
         self.logger.info(f'Received vote request for term: {candidate_term} from {candidate_Id}')
+        self.logger.info(f'Candidate last log term: {candidate_last_log_term}, last log index {candidate_last_log_index}')
+       
         # what's with so many election timeouts here?
         # Reset election timeout so that the follower does not immediately start a new election
         self.reset_election_timeout()
         voter_term = self.__log.get_term()
         voter_last_log_index = self.__log.get_log_idx()
         # can just get the term from log.term -- not the same!!
-        voter_last_log_term = self.__log.get(voter_last_log_index).term
+        self.logger.debug(f'voter term {voter_term}, voter log index {voter_last_log_index}')
+        if voter_last_log_index == -1 : 
+
+            self.logger.debug(f'voter last log index is -1, setting last log term to 0')
+            voter_last_log_term = 0
+        else:
+            self.logger.debug(f'voter last log term not zero, getting term from log')
+            voter_last_log_term = self.__log.get(voter_last_log_index)['term']
 
         if candidate_term > voter_term:
             # Step down if we are the leader or candidate    
             self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_Id}')
             self.__log.revert_to_follower(candidate_term, candidate_Id)
-            return True, candidate_term, candidate_Id
+            return raftdb.VoteResponse(success = True, term = candidate_term, leaderId = candidate_Id)
 
         elif candidate_term < voter_term:
 
             self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}, voter term: {voter_term}')
             # Reject request vote
-            return False, self.__log.get_term(), self.__log.get_leader()
+            return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
         
         else:
             # voter term and candidate term are equal
@@ -299,7 +323,7 @@ class Election(raftdb_grpc.RaftElectionService):
                     # already voted for someone else
 
                     self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}, already voted for {voted_for_id}')
-                    return False, self.__log.get_term(), self.__log.get_leader()
+                    return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
             
             elif voted_for_term < candidate_term or \
                 (voted_for_term == candidate_term and voted_for_id == candidate_Id): 
@@ -315,13 +339,13 @@ class Election(raftdb_grpc.RaftElectionService):
 
                     self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_Id}')
                     self.__log.cast_vote(candidate_term, candidate_Id)
-                    return True, self.__log.get_term(), self.__log.get_leader()
+                    return raftdb.VoteResponse(success = True, term = self.__log.get_term(), leaderId = self.__log.get_leader())
                 
                 else:
                     self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
-                    return False, self.__log.get_term(), self.__log.get_leader()
+                    return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
                 
             else:
                 self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
-                return False, self.__log.get_term(), self.__log.get_leader()
+                return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
    
