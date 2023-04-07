@@ -27,7 +27,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
     # why are we calling it command instead of entry?
     def handlePut(self,entry):
         self.logger.debug(f'Handling the put request for client id - {entry.clientid} and sequence number - {entry.sequence_number}')    
-    # case where the leader fails, checks if already applied to the state machine
+        # case where the leader fails, checks if already applied to the state machine
         last_committed_entry = self.__log.lastCommittedEntry(entry.clientid)
 
         if last_committed_entry!= -1 and last_committed_entry.sequence_number == entry.sequence_number:
