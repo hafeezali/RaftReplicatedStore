@@ -92,7 +92,6 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 		    value = entry.value,
 		    clientid = entry.clientid,
 	        sequence_number = entry.sequence_number,
-	
 	        prev_term = prev_term,
             prev_log_index = prev_log_index,
             lastCommitIndex = lastCommitIndex)
