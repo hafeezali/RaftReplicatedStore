@@ -47,7 +47,7 @@ class Client:
                         # timeout, will retry if we are still leader
 						print(f"Client request for Get key: {key} timed out, details: {status_code} {e.details()}\n")
 					else:
-						self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
+						print(f'Some other error, details: {status_code} {e.details()}') 
 
 
 

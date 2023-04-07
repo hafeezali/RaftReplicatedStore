@@ -20,7 +20,7 @@ RESPONSE_CODE_REDIRECT = 300
 CLIENT_SLEEP_TIME = 10
 
 # RPC timeout in seconds
-RPC_TIMEOUT = 20
+RPC_TIMEOUT = 50
 
 def chunks(l, n):
     n = max(1, n)
