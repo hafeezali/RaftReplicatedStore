@@ -84,7 +84,11 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         request = raftdb.LogEntry(
             term = term, 
             logIndex = prev_log_index + 1,
-            Entry = entry,
+            key = entry.key,
+		    value = entry.value,
+		    clientid = entry.clientid,
+	        sequence_number = entry.sequence_number,
+	
             prev_term = prev_term,
             prev_log_index = prev_log_index,
             lastCommitIndex = lastCommitIndex)
@@ -157,11 +161,11 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             self.logger.debug('Nothing in master log, clearing follower log and adding first entry')
             self.__log.clear()
 
-            self.__log.append({'key' : request.Entry.key,
-                                'value' :request.Entry.value,
+            self.__log.append({'key' : request.key,
+                                'value' :request.value,
                                 'term' : request.term, 
-                                'clientid': request.Entry.clientid,
-                                'sequence_number' : request.Entry.sequence_number
+                                'clientid': request.clientid,
+                                'sequence_number' : request.sequence_number
                                 })  
             return raftdb.LogEntryResponse(code=200, term = self.__log.get_term())
         # can be simplified to request.prev_term == self.__log.term no? Actually do we need to have current index as a separate global var? Where else is that used?

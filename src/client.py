@@ -85,8 +85,6 @@ class Client:
 					if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                         # timeout, will retry if we are still leader
 						print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
-					else:
-						self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
 
 
 
