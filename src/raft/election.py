@@ -21,9 +21,13 @@ class Election(raftdb_grpc.RaftElectionService):
         self.serverId = serverId
         self.__log = log
         self.logger = logger
+        self.last_heartbeat_time = 0
 
     def run_election_service(self):
         self.logger.debug('Starting Election Timeout')
+        # hack: find a cleaner way
+        start_up_time = 30
+        time.sleep(start_up_time)
         self.election_timeout()
 
 
@@ -56,7 +60,6 @@ class Election(raftdb_grpc.RaftElectionService):
         try:
 
             self.logger.info('Waiting for Election timeout')
-            self.reset_election_timeout()
 
             if self.timeout_thread and self.timeout_thread.is_alive():
                 return
@@ -81,23 +84,29 @@ class Election(raftdb_grpc.RaftElectionService):
         '''
 
         self.logger.debug('Resetting Election Timeout')
-        self.election_time = time.time() + self.random_timeout()
+        self.election_timeout_time = self.random_timeout()
+        self.election_time = time.time() + self.election_timeout_time
 
 
+    # BUG
+    # Todo: check this again later...
     def follower_loop(self):
         '''
         Followers execute this loop, and wait for heartbeats from leader
         '''
         self.logger.info('Starting follower loop')
         while self.__log.get_status() != config.STATE['LEADER']:
-            wait_time = self.election_time - time.time()
-            if wait_time < 0:
+            self.reset_election_timeout()
+            time_since_last_heartbeat = time.time() - self.last_heartbeat_time
+            if time_since_last_heartbeat > self.election_timeout_time:
                 if self.peers:
                     self.begin_election()
-            else:
-                time.sleep(wait_time)
-        
+            wait_time = self.election_time - time.time()
+            time.sleep(wait_time)
 
+        
+    # BUG: If n vote responses come simultaenously, then this can get called for n threads, and we can start n heartbeat threads for each follower
+    # We need a lock here
     def update_votes(self):
         self.num_votes += 1
         if self.num_votes >= self.majority:
@@ -185,6 +194,8 @@ class Election(raftdb_grpc.RaftElectionService):
             # If this server was leader or candidate it will set to follower
             self.logger.info(f'Accepted heartbeat for term: {sender_term}')
             self.__log.revert_to_follower(sender_term, sender_serverId)
+            # update last time we received heartbeat
+            self.last_heartbeat_time = time.time()
             return raftdb.HeartbeatResponse(code = config.RESPONSE_CODE_OK,
                                             term = sender_term,
                                             leaderId= self.__log.get_leader())
@@ -205,6 +216,7 @@ class Election(raftdb_grpc.RaftElectionService):
             Thread(target=self.send_vote_request, args=(peer, term)).start()
             
 
+    # Bug: vote is cast after becoming leader.
     def send_vote_request(self, voter: str, term: int):
   
         # Assumption is this idx wont increase when sending heartbeats right?
@@ -233,8 +245,8 @@ class Election(raftdb_grpc.RaftElectionService):
                                      lastLogTerm = candidate_last_log_term,
                                      lastLogIndex = candidate_last_log_index,
                                      candidateId = self.serverId)
-                    # vote_response = stub.RequestVote(request, timeout = config.RPC_TIMEOUT)
-                    vote_response = stub.RequestVote(request)
+                    vote_response = stub.RequestVote(request, timeout = config.RPC_TIMEOUT)
+                    # vote_response = stub.RequestVote(request)
 
                     self.logger.info(f'Vote Response for term {term} is {vote_response}')
                     # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?
@@ -318,8 +330,11 @@ class Election(raftdb_grpc.RaftElectionService):
         else:
             # voter term and candidate term are equal
             voted_for_term, voted_for_id = self.__log.get_voted_for()
+            self.logger.info("voted_for_term: " + str(voted_for_term))
+            self.logger.info("voted_for_id: " + str(voted_for_id))
             if voted_for_term == candidate_term: 
-                if voted_for_id > 0 and voted_for_id != candidate_Id:
+                # bug: check this
+                if voted_for_id != candidate_Id:
                     # already voted for someone else
 
                     self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}, already voted for {voted_for_id}')

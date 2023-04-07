@@ -201,7 +201,7 @@ class Log:
 						self.config_change[key] = False
 
 			config_file.close()
-			self.logger.info("Flush config sleeping")
+			# self.logger.info("Flush config sleeping")
 			time.sleep(100/1000)
 
 	'''
@@ -419,7 +419,7 @@ class Log:
 
 		with self.lock:
 			self.term = candidate_term
-			self.voted_for['term'] = candidate_id
+			self.voted_for['term'] = candidate_term
 			self.voted_for['server_id'] = candidate_id
 		self.config_change['term'] = True
 		self.config_change['voted_for'] = True

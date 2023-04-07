@@ -71,17 +71,24 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             return 'OK'
 
     def create_log_entry_request(self, prev_log_index, entry):
+        self.logger.debug("Inside create log entry request") 
         prev_term = -1
         if prev_log_index != -1:
-            prev_term = self.__log.get(prev_log_index).term,
-        
+            self.logger.debug("Fetching log entry at prev_log_index")
+            prev_term = self.__log.get(prev_log_index)['term'],
+        self.logger.debug("Fetching current term")
+        term = self.__log.get_term()
+        self.logger.debug("Fetching last commit index")
+        lastCommitIndex = self.__log.get_last_commit_index()
+        self.logger.debug("trying to create the request object")
         request = raftdb.LogEntry(
-            term = self.__log.get_term(), 
+            term = term, 
             logIndex = prev_log_index + 1,
             Entry = entry,
             prev_term = prev_term,
             prev_log_index = prev_log_index,
-            lastCommitIndex = self.__log.get_last_commit_index())
+            lastCommitIndex = lastCommitIndex)
+        self.logger.debug("Generated to create the request object")
         return request         
 
     # Proably wanna rename this to correct_follower_log and broadcast entry. And maybe split into two methods?
@@ -89,9 +96,23 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
             self.logger.debug(f'Broadcasting append entry to {follower}')
             stub = raftdb_grpc.ConsensusStub(channel)
+            self.logger.debug("Generated stub")
             prev_log_index = log_index_to_commit - 1
             request = self.create_log_entry_request(prev_log_index, entry)
-            response = stub.AppendEntries(request)
+            try:
+                self.logger.debug("Send append entries rpc")
+                response = stub.AppendEntries(request)
+                self.logger.debug("Send append entries rpc done")
+            except grpc.RpcError as e:
+                status_code = e.code()
+              
+                if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                    # timeout, will retry if we are still leader
+                    self.logger.debug(f'Request vote failed with timeout error, peer: {voter}, {status_code} details: {e.details()}')
+                else :
+                    self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
+            except Exception as e:
+                self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
             
             if response.code == 500 and response.term > self.__log.get_term() :
                 self.logger.debug('There is a server with larger term, updating term and status')
@@ -99,6 +120,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                 self.__log.update_term(response.term)
 
             else :
+                # have a different response code for this scenario to differentiate from other errors. Term can change and this will never exit
                 while response.code != 200 :
                     self.logger.debug('The entry is not matching the server log')
                     prev_log_index = prev_log_index - 1
@@ -111,16 +133,16 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                     request = request = self.create_log_entry_request(prev_log_index, entry)
                     response = stub.AppendEntries(request)
 	        
-            key = (entry.clientid, entry.sequence_number)
-            majority = len(self.__peers)/2 + 1
-            with self.lock :
-                self.counter[key] += 1
-                if self.counter[key] >= majority and key in self.commit_done:
-                    self.logger.debug('Majority - wuhooooyayyyyy')
-                    self.commit_done[key] = 1
-                if self.counter[key] == len(self.__peers) :
-                    self.logger.debug(f'All the peers have {key} in their log, noicee')
-                    self.counter.pop(key)
+                key = (entry.clientid, entry.sequence_number)
+                majority = len(self.__peers)/2 + 1
+                with self.lock :
+                    self.counter[key] += 1
+                    if self.counter[key] >= majority and key in self.commit_done:
+                        self.logger.debug('Majority - wuhooooyayyyyy')
+                        self.commit_done[key] = 1
+                    if self.counter[key] == len(self.__peers) :
+                        self.logger.debug(f'All the peers have {key} in their log, noicee')
+                        self.counter.pop(key)
             
 
     def AppendEntries(self, request, context):
