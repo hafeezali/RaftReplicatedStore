@@ -76,6 +76,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         prev_term = -1
         if prev_log_index != -1:
             self.logger.debug("Fetching log entry at prev_log_index")
+
             prev_term = self.__log.get(prev_log_index)['term']
         
         term = self.__log.get_term()
@@ -83,6 +84,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         lastCommitIndex = self.__log.get_last_commit_index()
         self.logger.debug("Fetched last commit index")
         self.logger.debug(f'trying to create the request object term - {term}, prev_term - {prev_term}, lastcommitidx - {lastCommitIndex}')
+
         request = raftdb.LogEntry(
             term = term, 
             logIndex = prev_log_index + 1,
@@ -109,6 +111,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                 self.logger.debug("Send append entries rpc")
                 response = stub.AppendEntries(request)
                 self.logger.debug("Send append entries rpc done")
+
                 if response.code == 500 and response.term > self.__log.get_term() :
                     self.logger.debug('There is a server with larger term, updating term and status')
                     self.__log.update_status(config.STATE.CANDIDATE)
@@ -147,9 +150,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                 else :
                     self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
             except Exception as e:
-                self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
-            
-            
+                self.logger.debug(f'Some other error, details: {status_code} {e.details()}')             
 
     def AppendEntries(self, request, context):
         # If previous term and log index for request matches the last entry in log, append
