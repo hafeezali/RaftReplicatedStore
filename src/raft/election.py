@@ -132,8 +132,7 @@ class Election(raftdb_grpc.RaftElectionService):
             
             while self.__log.get_term() == term and self.__log.get_status() == config.STATE['LEADER']:
                 try:
-                    # response = stub.Heartbeat(request, timeout=config.RPC_TIMEOUT)
-                    response = stub.Heartbeat(request)
+                    response = stub.Heartbeat(request, timeout=config.RPC_TIMEOUT)
 
                     if response.code != config.RESPONSE_CODE_OK:
                     # In what scenario can we get a code != 200? Is there a timeout on these rpcs? What if the node is down? Due to membership change or just node crash for extended duration? 

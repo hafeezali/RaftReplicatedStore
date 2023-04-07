@@ -21,24 +21,34 @@ class Client:
 			with grpc.insecure_channel(self.server_addr) as channel:
 				stub = raftdb_grpc.ClientStub(channel)
 				request = raftdb.GetRequest(key=key)
-				response = stub.Get(request)
 
-				leader_id = response.leaderId
+				try:
+					response = stub.Get(request, timeout=config.RPC_TIMEOUT)
 
-				if response.code == config.RESPONSE_CODE_REDIRECT:
+					leader_id = response.leaderId
 
-					if leader_id == None or leader_id == '':
-						time.sleep(config.CLIENT_SLEEP_TIME)
+					if response.code == config.RESPONSE_CODE_REDIRECT:
+
+						if leader_id == None or leader_id == '':
+							time.sleep(config.CLIENT_SLEEP_TIME)
+						else:
+							self.redirectToLeader(response.leaderId.replace("'", ""))
+
+					elif response.code == config.RESPONSE_CODE_OK:
+						print(f"GET for key: {key} Succeeded, value: {response.value}\n")
+						# print(response.value)
+						break
 					else:
-						self.redirectToLeader(response.leaderId.replace("'", ""))
+						print("Something went wrong, exiting put method\n")
+						break
+				except grpc.RpcError as e:
+					status_code = e.code()
+					if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                        # timeout, will retry if we are still leader
+						print(f"Client request for Get key: {key} timed out, details: {status_code} {e.details()}\n")
+					else:
+						self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
 
-				elif response.code == config.RESPONSE_CODE_OK:
-					print(f"GET for key: {key} Succeeded, value: {response.value}\n")
-					# print(response.value)
-					break
-				else:
-					print("Something went wrong, exiting put method\n")
-					break
 
 
 	def requestPut(self, key, value, clientid, sequence_number):
@@ -47,26 +57,37 @@ class Client:
 			with grpc.insecure_channel(self.server_addr) as channel:
 				stub = raftdb_grpc.ClientStub(channel)
 				request = raftdb.PutRequest(key=key, value=value, clientid = clientid,sequence_number = sequence_number )
-				response = stub.Put(request)
+				
+				try:
+					response = stub.Put(request, timeout=config.RPC_TIMEOUT)
 
-				leader_id = response.leaderId
+					leader_id = response.leaderId
 
-				if response.code == config.RESPONSE_CODE_REDIRECT:
-					if leader_id == None or leader_id == '':
-						time.sleep(config.CLIENT_SLEEP_TIME)
+					if response.code == config.RESPONSE_CODE_REDIRECT:
+						if leader_id == None or leader_id == '':
+							time.sleep(config.CLIENT_SLEEP_TIME)
+						else:
+							self.redirectToLeader(response.leaderId.replace("'", ""))
+							# Then code will retry automatically
+
+					elif response.code == config.RESPONSE_CODE_OK:
+						print(f"Put of key: {key}, value: {value} succeeded!\n")
+						break
+					elif response.code == config.RESPONSE_CODE_REJECT:
+						print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
+						break
 					else:
-						self.redirectToLeader(response.leaderId.replace("'", ""))
-						# Then code will retry automatically
+						print("Something went wrong, exiting put method\n")
+						break
 
-				elif response.code == config.RESPONSE_CODE_OK:
-					print(f"Put of key: {key}, value: {value} succeeded!\n")
-					break
-				elif response.code == config.RESPONSE_CODE_REJECT:
-					print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
-					break
-				else:
-					print("Something went wrong, exiting put method\n")
-					break
+				except grpc.RpcError as e:
+					status_code = e.code()
+					if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                        # timeout, will retry if we are still leader
+						print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
+					else:
+						self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
+
 
 
 if __name__ == '__main__':
