@@ -221,20 +221,24 @@ class Log:
 		self.logger.info("Commit done")
 
 	def get_log_idx(self):
-		# self.logger.info("Get log idx")
+		self.logger.debug("Get log idx")
 
 		with self.lock:
+			self.logger.debug("Got the lock for idx")
 			return self.log_idx
 		
+		
 	def get_last_commit_index(self):
-
+		self.logger.debug("Get last commit idx")
 		with self.lock:
+			self.logger.debug("Got the lock for commit idx")
 			return self.last_commit_idx
 
 	def get_term(self):
 		# self.logger.info("Get term")
-
+		self.logger.debug("Get term")
 		with self.lock:
+			self.logger.debug("Got the lock for term")
 			return self.term
 
 	def update_term(self, term):

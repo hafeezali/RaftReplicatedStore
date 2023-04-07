@@ -23,12 +23,12 @@ class Client:
 				request = raftdb.GetRequest(key=key)
 
 				try:
-					response = stub.Get(request, timeout=config.RPC_TIMEOUT)
+					response = stub.Get(request, timeout=100)
 
 					leader_id = response.leaderId
 
 					if response.code == config.RESPONSE_CODE_REDIRECT:
-
+						print(f"REDIRECT - {leader_id}")
 						if leader_id == None or leader_id == '':
 							time.sleep(config.CLIENT_SLEEP_TIME)
 						else:
