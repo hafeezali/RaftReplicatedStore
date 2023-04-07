@@ -10,10 +10,8 @@ import protos.raftdb_pb2_grpc as raftdb_grpc
 from logs.log import Log
 
 
-# this class needs to implement Raft Service (probably Election Service)
 class Election(raftdb_grpc.RaftElectionService):
 
-    # What is queue and why is that needed? Is database needed? Isn't just log enough?
     def __init__(self, peers: list, log: Log, serverId: int, logger):
         self.timeout_thread = None
         self.num_votes = 0
@@ -22,6 +20,7 @@ class Election(raftdb_grpc.RaftElectionService):
         self.__log = log
         self.logger = logger
         self.last_heartbeat_time = 0
+        self.election_lock = Lock() # Adding for updating votes
 
     def run_election_service(self):
         self.logger.debug('Starting Election Timeout')
@@ -38,7 +37,7 @@ class Election(raftdb_grpc.RaftElectionService):
         '''
         self.__log.set_self_candidate()
         self.logger.debug(f'Starting a new election for term {self.__log.get_term()}')
-        self.num_votes = 0
+        self.reset_num_votes()
         
         # Calculate majority
         self.majority = ((1 + len(self.peers)) // 2) + 1 
@@ -104,12 +103,23 @@ class Election(raftdb_grpc.RaftElectionService):
             wait_time = self.election_time - time.time()
             time.sleep(wait_time)
 
+    def get_num_votes(self):
+        with self.election_lock:
+            return self.num_votes
         
+    def increment_num_votes(self):
+        with self.election_lock:
+            self.num_votes += 1
+
+    def reset_num_votes(self):
+        with self.election_lock:
+            self.num_votes = 0
+
     # BUG: If n vote responses come simultaenously, then this can get called for n threads, and we can start n heartbeat threads for each follower
-    # We need a lock here
+    # We need a lock here --- ADDED
     def update_votes(self):
-        self.num_votes += 1
-        if self.num_votes >= self.majority:
+        self.increment_num_votes()
+        if self.get_num_votes() >= self.majority:
             self.logger.info(f'Received majority of votes for term {self.__log.get_term()}')
             # why is this lock even needed here? what is the significance? The election process is run by only one thread no?
             self.__log.set_self_leader()
@@ -216,7 +226,7 @@ class Election(raftdb_grpc.RaftElectionService):
             Thread(target=self.send_vote_request, args=(peer, term)).start()
             
 
-    # Bug: vote is cast after becoming leader.
+    # BUG: vote is cast after becoming leader.
     def send_vote_request(self, voter: str, term: int):
   
         # Assumption is this idx wont increase when sending heartbeats right?
@@ -333,7 +343,7 @@ class Election(raftdb_grpc.RaftElectionService):
             self.logger.info("voted_for_term: " + str(voted_for_term))
             self.logger.info("voted_for_id: " + str(voted_for_id))
             if voted_for_term == candidate_term: 
-                # bug: check this
+                # BUG: check this
                 if voted_for_id != candidate_Id:
                     # already voted for someone else
 
