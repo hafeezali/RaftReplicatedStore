@@ -1,7 +1,6 @@
-# Make this guy implement an interface
 class MemoryStore:
 
-	def __init__(self):
+	def __init__(self, logger):
 		self.db = dict()
 
 	def get(self, key):
