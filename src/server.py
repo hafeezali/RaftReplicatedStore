@@ -14,10 +14,10 @@ from threading import Thread
 class Server(raftdb_grpc.ClientServicer):
 
     def __init__(self, type, server_id, peer_list):
-        self.store = Database(type=type, server_id=server_id)
         # who updates state? does this need be here or in election layer?
         self.log = Log(server_id, self.store, self.logger)
         self.logger = Logging(server_id).get_logger()
+        self.store = Database(type=type, server_id=server_id, logger=self.logger)
         self.election = Election(peers=peer_list,log=self.log, logger=self.logger, serverId=server_id)
         
         # Start thread for election service

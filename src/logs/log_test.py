@@ -5,11 +5,10 @@ sys.path.append('../')
 sys.path.append('../../')
 
 from log import Log
-from store.memorydatabase.mem_store import MemoryStore
+from store.database import Database
 from logger import Logging
 
-# Test with rocks db
-# Test recovery of db state and in-mem state
+# Test recovery of db state and in-mem state. Implement clear on db. Implement shelve on im-mem db. Implement clear on in-mem db
 
 # Tested: clear, is_applied, append, commit, commit_upto, apply, get_last_committed_sequence_for, insert_at
 
@@ -107,7 +106,7 @@ def test_last_commit_idx(log):
 	assert log.debug_get_last_commit_idx() == -1
 
 	# append first entry
-	idx = log.append(create_entry(100, 1001, term, clientid, sequence_number))
+	idx = log.append(create_entry(100, 2001, term, clientid, sequence_number))
 
 	assert idx == 0
 
@@ -118,7 +117,7 @@ def test_last_commit_idx(log):
 	# append second entry
 	sequence_number = sequence_number + 1
 
-	log.append(create_entry(100, 2001, term, clientid, sequence_number))
+	log.append(create_entry(100, 1001, term, clientid, sequence_number))
 
 	# append third entry
 	sequence_number = sequence_number + 1
@@ -222,8 +221,25 @@ def test_insert_at(log):
 
 if __name__ == '__main__':
 	logger = Logging('server_1').get_logger()
+
+	db = Database(server_id = 'server_1', logger = logger, type = 'sqlite3')
+	log = Log('server_1', db, logger)
+
+	if test_normal_functionality(log, db):
+		print('normal functionality test passed')
+
+	if test_last_commit_idx(log):
+		print('last commit idx test passed')
+
+	log = Log('server_1', db, logger)
+
+	if test_recovery(log):
+		print('test recovery passed')
+
+	if test_insert_at(log):
+		print('insert at test passed')
 	
-	db = MemoryStore()
+	db = Database(server_id = 'server_1', type = 'memory', logger = logger)
 	log = Log('server_1', db, logger)
 
 	if test_normal_functionality(log, db):
