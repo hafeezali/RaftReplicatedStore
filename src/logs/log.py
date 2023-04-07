@@ -6,7 +6,7 @@ from os import path, getenv, makedirs
 from threading import Lock, Thread
 
 import time
-import pickle
+import shelve
 
 from raft.config import STATE
 
@@ -168,14 +168,6 @@ class Log:
 		# remove this
 		self.debug_print_log()
 		self.debug_print_config()
-
-		self.logger.info("Recover done")
-
-		self.log_file.sync()
-		self.config_file.sync()
-
-		# remove this
-		self.debug_print_log()
 
 		self.logger.info("Recover done")
 
