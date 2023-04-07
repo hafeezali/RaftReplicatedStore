@@ -62,7 +62,7 @@ class Log:
 		self.last_commit_idx = -1
 		self.log_idx = -1
 		self.last_applied_idx = -1
-		self.term = -1
+		self.term = 0
 		self.status = STATE['FOLLOWER']
 		self.voted_for = {
 			'term': -1,
@@ -417,7 +417,10 @@ class Log:
 		self.logger.info("Get last committed sequence for")
 
 		with self.lock:
-			return self.last_applied_command_per_client[client_id]
+			if client_id in self.last_applied_command_per_client:
+				return self.last_applied_command_per_client[client_id]
+			else:
+				return -1
 
 	def clear(self):
 		self.logger.info("clear")

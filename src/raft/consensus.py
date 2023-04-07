@@ -28,9 +28,9 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
     def handlePut(self,entry):
         
         # case where the leader fails, checks if already applied to the state machine
-        last_committed_entry = self.__log.lastCommittedEntry(entry.clientid)
+        last_committed_seq = self.__log.get_last_committed_sequence_for(entry.clientid)
 
-        if last_committed_entry != -1 and last_committed_entry.sequence_number == entry.sequence_number:
+        if last_committed_seq == entry.sequence_number:
             return 'OK'
 
         key = (entry.clientid, entry.sequence_number)
