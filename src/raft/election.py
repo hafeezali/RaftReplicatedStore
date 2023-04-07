@@ -217,7 +217,7 @@ class Election(raftdb_grpc.RaftElectionService):
         if candidate_last_log_index == -1 : 
             candidate_last_log_term = 0
         else:
-            candidate_last_log_term = self.__log.get(candidate_last_log_index).term
+            candidate_last_log_term = self.__log.get(candidate_last_log_index)['term']
         
         
 
@@ -302,7 +302,7 @@ class Election(raftdb_grpc.RaftElectionService):
             voter_last_log_term = 0
         else:
             self.logger.debug(f'voter last log term not zero, getting term from log')
-            voter_last_log_term = self.__log.get(voter_last_log_index).term
+            voter_last_log_term = self.__log.get(voter_last_log_index)['term']
 
         if candidate_term > voter_term:
             # Step down if we are the leader or candidate    

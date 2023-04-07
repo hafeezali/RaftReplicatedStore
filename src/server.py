@@ -36,6 +36,7 @@ class Server(raftdb_grpc.ClientServicer):
         if leader_id == self.server_id:
             return raftdb.GetResponse(code = 200, value = self.store.get(request.key), leaderId = leader_id)
         else:
+            self.logger.info(f"Redirecting client to leader {leader_id}")
             return raftdb.GetResponse(code = 300, value = None, leaderId = leader_id)
  
 
@@ -54,6 +55,7 @@ class Server(raftdb_grpc.ClientServicer):
                 # add more appropriate error message
                 return raftdb.PutResponse(code = 500, leaderId = leader_id)
         else:
+            self.logger.info(f"Redirecting client to leader {leader_id}")
             return raftdb.PutResponse(code = 300, leaderId = leader_id)
         
 
@@ -89,5 +91,13 @@ if __name__ == '__main__':
     # server_id = 'server_1'
     # client_port = '50051'
     # raft_port = '50052'
-    server = Server(type=os.getenv('TYPE').replace("'",""), server_id = os.getenv('SERVERID'),peer_list=os.getenv('PEERS').split(','))
+
+    server_id = os.getenv('SERVERID')
+    print(f"Starting Server {server_id}")
+    
+    peer_list = peer_list=os.getenv('PEERS').split(',')
+
+    type = os.getenv('TYPE').replace("'", "")
+    server = Server(type=type, server_id=server_id, peer_list=peer_list)
+
     serve(server)

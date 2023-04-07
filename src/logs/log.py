@@ -196,20 +196,19 @@ class Log:
 	If any config has changed, persist that change. Dedicated thread created to achieve this
 	'''
 	def flush_config(self):
-		self.logger.info("Flush config")
+		# self.logger.info("Flush config")
 
 		while True:
 			config_file = shelve.open(self.config_path, 'c', writeback=True)
 			with self.lock:
-				self.logger.info("Flush config woke up")
+				# self.logger.info("Flush config woke up")
 				for key in self.config_change:
 					if self.config_change[key] is True:
-						self.logger.info(key + " changed")
+						# self.logger.info(key + " changed")
 						config_file[key] = getattr(self, key)
 						self.config_change[key] = False
 
 			config_file.close()
-
 			self.logger.info("Flush config sleeping")
 			time.sleep(100/1000)
 
