@@ -18,6 +18,16 @@ class Client:
 
 	def __init__(self):
 		self.server_addr = 'localhost:50051'
+		self.sequence_number = 0
+
+	def get_sequence_number(self):
+		return self.sequence_number
+
+	def set_sequence_number(self, seq_num):
+		self.sequence_number = seq_num
+
+	def increment_sequence_number(self):
+		self.sequence_number += 1
 
 	def redirectToLeaderGet(self, leader_id, key):
 		print("Redirecting to leader with id: " + leader_id)
@@ -97,16 +107,22 @@ class Client:
 
 if __name__ == '__main__':
 	client = Client()
+	starting_seq_num = int(input("Enter starting sequence number\n"))
+	client.set_sequence_number(starting_seq_num)
+
 	while True:
 		reqType = int(input("Options - Get: 1, Put: 2, Quit: 3\n"))
 		if reqType == 1:
 			key = int(input("Enter key\n"))
 			client.requestGet(key)
 		elif reqType == 2:
-			inputs = list(map(int, input("\nEnter key, value, clientid, seq_number [ex: 1 2 3 4]\n").strip().split()))[:4]
+			inputs = list(map(int, input("\nEnter key, value, clientid [ex: 1 2 3]\n").strip().split()))[:4]
+			inputs.append(client.get_sequence_number())
 			client.requestPut(*inputs)
+			client.increment_sequence_number()
 		elif reqType == 3:
 			print("SEEEE YAAA\n")
 			break
 		else:
 			print("Invalid input\n")
+		

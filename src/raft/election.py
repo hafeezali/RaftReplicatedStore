@@ -274,7 +274,7 @@ class Election(raftdb_grpc.RaftElectionService):
             self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_id}')
             self.__log.cast_vote(candidate_term, candidate_id)
             ## Since we are casting vote, at this point we don't know who the leader for this term is 
-            self.__log.update_leader(None)
+            self.__log.update_leader('No leader')
             return raftdb.VoteResponse(success = True, term = self.__log.get_term(), leaderId = self.__log.get_leader())                
         else:
             self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_id}')
@@ -323,7 +323,7 @@ class Election(raftdb_grpc.RaftElectionService):
         # Decide if we are giving a vote to candidate
         if candidate_term > voter_term:
             # Step down if we are the leader or candidate    
-            self.__log.revert_to_follower(candidate_term, None)
+            self.__log.revert_to_follower(candidate_term, 'No leader')
             # check our logs to see if they are more complete than the candidate's 
             return self.check_completeness_of_log(voter_last_log_term, voter_last_log_index,
                                         candidate_last_log_term, candidate_last_log_index,
