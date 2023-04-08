@@ -8,11 +8,7 @@ peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:500
 
 '''
 TODO:
-1. Sequence number must be monotonically increasing.
-2. Redirection can happen in 2 scenarios:
- - No leader is elected yet. We need to sleep for this
- - Different leader elected. We should retry immediately here
-3. Fine tune CLIENT_SLEEP_TIME 
+1. Fine tune CLIENT_SLEEP_TIME 
 '''
 class Client:
 

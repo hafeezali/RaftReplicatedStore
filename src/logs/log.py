@@ -32,7 +32,6 @@ TODO:
 3. Shelve is having some weird behavior when appending the first element to the list - investigate this later (fixed by using a dict instead of list for log)
 4. We probably want the locks to become more finer for some performance gains
 5. Can ignore committed logs from disk on recover. Can remove committed logs from log dict
-6. Can implement persistence of in-memory store
 '''
 
 class Log:
