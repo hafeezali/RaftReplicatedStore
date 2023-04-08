@@ -8,7 +8,7 @@ from log import Log
 from store.database import Database
 from logger import Logging
 
-# Test recovery of db state and in-mem state. Implement clear on db. Implement shelve on im-mem db. Implement clear on in-mem db
+# Test: recovery of db state and in-mem state. Implement clear on db. Implement shelve on im-mem db. Implement clear on in-mem db
 
 # Tested: clear, is_applied, append, commit, commit_upto, apply, get_last_committed_sequence_for, insert_at
 

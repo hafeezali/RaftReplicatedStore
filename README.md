@@ -51,10 +51,6 @@ Configuration
 Database details
 
 
-
-Add pics of protos and algos from the slides here
-
-
 TODO ONE MORE THING
 
 implement timeouts for Client request RPCs
@@ -66,8 +62,10 @@ was talking to is no longer the leader. So the client should retry the request w
 ## Running docker:
 
 To start:
+
 docker build -t kvstore -f Dockerfile .    
 docker compose -f docker-compose.yaml up -d
 
 To stop:
+
 docker-compose down --remove-orphans
