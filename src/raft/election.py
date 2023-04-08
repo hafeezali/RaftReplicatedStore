@@ -28,7 +28,6 @@ class Election(raftdb_grpc.RaftElectionService):
 
     def run_election_service(self):
         self.logger.debug('Starting Election Timeout')
-        time.sleep(config.ELECTION_START_UP_TIME)
         self.election_timeout()
 
     def begin_election(self):

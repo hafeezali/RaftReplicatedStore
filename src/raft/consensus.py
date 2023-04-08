@@ -175,7 +175,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             self.__log.clear()
             self.__log.append({'key' : entry.key,
                                 'value' :entry.value,
-                                'term' : entry.term, 
+                                'term' : request.term, 
                                 'clientid': entry.clientid,
                                 'sequence_number' : entry.sequence_number
                                 })
@@ -185,7 +185,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
             value = {'key' : entry.key,
                         'value' :entry.value,
-                        'term' : entry.term,
+                        'term' : request.term,
                         'clientid': entry.clientid,
                         'sequence_number' : entry.sequence_number}
             self.__log.insert_at(request.logIndex, value) 
