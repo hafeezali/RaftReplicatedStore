@@ -2,20 +2,16 @@ import sqlite3
 
 from os import path, getenv, makedirs
 
-'''
-TODO:
-1. Implement persistence of SqliteStore
-2. Implement recovery of SqliteStore
-'''
 class SqliteStore:
 
-	def __init__(self, store_name, logger):
+	def __init__(self, server_id, logger):
 
 		self.logger = logger
 
 		# Set the store path
 		store_dir = './store'
-		self.store_path = path.join(store_dir, store_name)
+		self.db_backup_file_name = server_id + '_sql'
+		self.store_path = path.join(store_dir, self.db_backup_file_name)
 
 		if not path.exists(store_dir):
 			makedirs(store_dir)
@@ -52,3 +48,12 @@ class SqliteStore:
 		cursor = self.conn.cursor()
 		cursor.execute("INSERT OR REPLACE INTO key_value_store (key, value) VALUES (?, ?)", (key, value))
 		self.conn.commit()
+
+	def clear_backup(self):
+		self.logger.info("Clear backup for Sqlite db called")
+		cursor = self.conn.cursor()
+		cursor.execute("""
+			DELETE FROM key_value_store;
+		""")
+		self.conn.commit()
+		self.logger.info("Clear backup done")

@@ -13,11 +13,11 @@ TODO:
 class Database:
 
 	def __init__(self, server_id, logger, type = 'memory'):
+
 		if type == 'memory':
-			self.db = MemoryStore(logger)
+			self.db = MemoryStore(server_id, logger)
 		else:
-			store_name = server_id + ".db"
-			self.db = SqliteStore(store_name, logger)
+			self.db = SqliteStore(server_id, logger)
 
 		self.lock = Lock()
 		
@@ -26,3 +26,6 @@ class Database:
 
 	def put(self, key, value):
 		self.db.put(key, value)
+
+	def clear_backup(self):
+		self.db.clear_backup()

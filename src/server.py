@@ -17,6 +17,7 @@ TODO:
 2. What happens when we dont get majority when trying a put? We need to retry
 3. There might be some inconsistency at the db level here - Puts are happening from log, whereas gets are happening here. Do SELECT and INSERT/UPDATE overlap in sqlite3? 
     Hopefully latching is implemented for in-mem dict by default...
+4. When does the __init__ here finish execution?
 '''
 class Server(raftdb_grpc.ClientServicer):
 
@@ -32,6 +33,7 @@ class Server(raftdb_grpc.ClientServicer):
         Thread(target=self.election.run_election_service()).start()
 
         self.consensus = Consensus(peers=peer_list, log=self.log, logger=self.logger)
+        self.logger.info("Finished starting server... " + self.server_id)
 
     def Get(self, request, context):
         # Strongly consistent -- if we allow only one outstanding client request, the system must be strongly consistent by default
