@@ -384,12 +384,16 @@ class Log:
 		with self.lock:
 			self.status = STATE['LEADER']
 			self.leader_id = self.server_id
+			self.logger.info(f"leader for term {self.term} is meeeee, self serverid {self.server_id}, leader id {self.leader_id}, ")
 		self.config_change['status'] = True
 		self.config_change['leader_id'] = True
 
 		self.logger.info("Set self leader done")
 
 	def revert_to_follower(self, new_term, new_leader_id):
+		## If we are reverting to follower because we have cast a vote, we will set our term to new term
+		## but we will set leader ID to None because we don't know if they actually won the election yet
+
 		self.logger.info("Checking if I need to revert to follower")
 
 		with self.lock:
