@@ -117,9 +117,8 @@ if __name__ == '__main__':
             key = int(input("Enter key\n"))
             client.requestGet(key)
         elif reqType == 2:
-            inputs = list(map(int, input("\nEnter key, value, clientid [ex: 1 2 3]\n").strip().split()))[:4]
+            inputs = list(map(int, input("\nEnter key, value, clientid [ex: 1 2 3]\n").strip().split()))[:3]
             inputs.append(client.get_sequence_number())
-            print(inputs)
             client.requestPut(*inputs)
             client.increment_sequence_number()
         elif reqType == 3:
