@@ -257,7 +257,7 @@ class Log:
 			while idx + 1 <= index and idx + 1 <= self.log_idx:
 				idx = idx + 1
 				self.log[idx]['commit_done'] = True
-			self.last_commit_idx = index
+			self.last_commit_idx = idx
 			self.logger.info("End last commit idx: " + str(self.last_commit_idx))
 		self.config_change['last_commit_idx'] = True
 
