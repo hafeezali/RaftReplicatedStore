@@ -51,11 +51,14 @@ class Server(raftdb_grpc.ClientServicer):
         leader_id = self.log.get_leader()
 
         if leader_id == self.server_id:
-            if self.consensus.handlePut(request) == 'OK':
+            response = self.consensus.handlePut(request)
+            if response == 'OK':
                 return raftdb.PutResponse(code = config.RESPONSE_CODE_OK, leaderId = leader_id)
             else:
-                self.logger.info("Put request failed... Further investifation needed")
-                return raftdb.PutResponse(code = config.RESPONSE_CODE_REJECT, leaderId = leader_id)
+                # Reverted to follower, so redirect
+                if response == '500 ':
+                    self.logger.info("Put request failed... Redirecting it to follower")
+                return raftdb.PutResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = self.log.get_leader())
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
             return raftdb.PutResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = leader_id)
