@@ -95,15 +95,16 @@ class Client:
 
                 elif response.code == config.RESPONSE_CODE_REJECT:
                     print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
-                        
+						
                 else:
                     print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
+						
             except grpc.RpcError as e:
                 status_code = e.code()
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                     print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
                 else :
-                    print(f'Some other error, details: {status_code} {e.details()}')    
+                    print(f'Some other error, details: {status_code} {e.details()}')	
 
 
 if __name__ == '__main__':
