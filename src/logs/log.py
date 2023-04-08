@@ -381,10 +381,14 @@ class Log:
 		with self.lock:
 			self.term += 1
 			self.status = STATE['CANDIDATE']
-		self.config_change['status'] = True
-		self.config_change['term'] = True
+			self.voted_for['term'] = self.term
+			self.voted_for['server_id'] = self.server_id
+			self.logger.info(f"my term {self.term}, my id {self.server_id}")
+			self.logger.info(f"Updating status, voted for term {self.voted_for['term']}, voted for id {self.voted_for['server_id']}")
 		
-		self.logger.info("Set self candidate done")		
+		self.config_change['voted_for'] = True
+		self.config_change['status'] = True
+		self.config_change['term'] = True	
 
 		self.logger.info("Set self candidate done")		
 
