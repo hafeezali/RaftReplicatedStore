@@ -5,6 +5,11 @@ from store.memorydatabase.mem_store import MemoryStore
 from store.sqlitedb.sqlite_store import SqliteStore
 import shelve
 
+'''
+TODO:
+1. Get should be surrounded by try catch statements. Throw a key error if key is missing
+'''
+
 class Database:
 
 	def __init__(self, server_id, logger, type = 'memory'):
@@ -18,10 +23,6 @@ class Database:
 		
 	def get(self, key):
 		return self.db.get(key)
-		## Should we add a try catch?? What do we return if the key is not present
-		## Does it throw a key error?
 
 	def put(self, key, value):
 		self.db.put(key, value)
-
-		## Should this return true/false????
