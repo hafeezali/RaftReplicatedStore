@@ -316,6 +316,7 @@ class Log:
 			elif index > self.log_idx + 1:
 				self.logger.error("index > log_idx + 1 -- must not be possible")
 				self.logger.info("Insert at index done")
+				return -1
 			self.log[index] = entry
 			self.log[index]['commit_done'] = False
 
