@@ -28,6 +28,8 @@ CLIENT_SLEEP_TIME = 40
 # RPC timeout in seconds
 RPC_TIMEOUT = 100
 
+ELECTION_START_UP_TIME = 60
+
 def chunks(l, n):
     n = max(1, n)
     return (l[i:i+n] for i in range(0, len(l), n))

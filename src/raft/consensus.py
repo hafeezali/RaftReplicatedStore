@@ -22,7 +22,7 @@ TODO:
 8. Shouldn't "while prev_log_index < log_index_to_commit - 1:" be <=
 9, In AppendEntries, should we get term, multiple times or fetch it once. Pros vs cons?
 10. In AppendEntries, self.__log.commit_upto(request.lastCommitIndex) should be commit_upto(min(request.lastCommitIndex, index_from_insert_at))
-11. If majority is not received, we have to retry until it succeeds otherwise find a way to clear the leader log
+11. If majority is not received, we have to retry until it succeeds otherwise find a way to clear the leader log. Retry must happen from within consensus
 '''
 
 class Consensus(raftdb_grpc.ConsensusServicer) :
