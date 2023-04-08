@@ -1,3 +1,9 @@
+'''
+TODO:
+1. Unused configs which are commented out, must be removed
+2. We need to fine tune the timeout values once we have testing completed
+'''
+
 from os import getenv
 
 STATE = {
@@ -17,10 +23,10 @@ RESPONSE_CODE_OK = 200
 RESPONSE_CODE_REJECT = 500
 RESPONSE_CODE_REDIRECT = 300
 
-CLIENT_SLEEP_TIME = 10
+CLIENT_SLEEP_TIME = 40
 
 # RPC timeout in seconds
-RPC_TIMEOUT = 50
+RPC_TIMEOUT = 100
 
 def chunks(l, n):
     n = max(1, n)

@@ -116,8 +116,6 @@ class Log:
 
 		self.logger.info("Clear log backup done")
 
-		self.logger.info("Clear log backup done")
-
 	'''
 	On node restart, we want to recover node state and pickup from where we left off. This involves recovering log apart from server state
 	'''
@@ -193,15 +191,13 @@ class Log:
 		while True:
 			config_file = shelve.open(self.config_path, 'c', writeback=True)
 			with self.lock:
-				# self.logger.info("Flush config woke up")
 				for key in self.config_change:
 					if self.config_change[key] is True:
-						# self.logger.info(key + " changed")
+						self.logger.info("Inside flush config: " + str(key) + " changed. Persisting change")
 						config_file[key] = getattr(self, key)
 						self.config_change[key] = False
 
 			config_file.close()
-			# self.logger.info("Flush config sleeping")
 			time.sleep(100/1000)
 
 	'''
@@ -213,7 +209,7 @@ class Log:
 		with self.lock:
 			self.log[index]['commit_done'] = True
 			self.logger.info("Start commit index: " + str(self.last_commit_idx))
-			while self.last_commit_idx < index and self.log[self.last_commit_idx+1]['commit_done'] is True:
+			while self.last_commit_idx + 1 <= self.log_idx and self.log[self.last_commit_idx+1]['commit_done'] is True:
 				self.last_commit_idx += 1
 			self.logger.info("End commit index: " + str(self.last_commit_idx))
 			self.config_change['last_commit_idx'] = True
@@ -221,24 +217,23 @@ class Log:
 		self.logger.info("Commit done")
 
 	def get_log_idx(self):
-		self.logger.debug("Get log idx")
+		self.logger.info("Get log idx")
 
 		with self.lock:
-			self.logger.debug("Got the lock for idx")
+			self.logger.info("Got the lock for idx")
 			return self.log_idx
 		
 		
 	def get_last_commit_index(self):
-		self.logger.debug("Get last commit idx")
+		self.logger.info("Get last commit idx")
 		with self.lock:
-			self.logger.debug("Got the lock for commit idx")
+			self.logger.info("Got the lock for commit idx")
 			return self.last_commit_idx
 
 	def get_term(self):
-		# self.logger.info("Get term")
-		self.logger.debug("Get term")
+		self.logger.info("Get term")
 		with self.lock:
-			self.logger.debug("Got the lock for term")
+			self.logger.info("Got the lock for term")
 			return self.term
 
 	def update_term(self, term):
@@ -259,10 +254,10 @@ class Log:
 		with self.lock:
 			self.logger.info("Start last commit idx: " + str(self.last_commit_idx))
 			idx = self.last_commit_idx
-			while idx + 1 <= index:
+			while idx + 1 <= index and idx + 1 <= self.log_idx:
 				idx = idx + 1
 				self.log[idx]['commit_done'] = True
-			self.last_commit_idx = index
+			self.last_commit_idx = idx
 			self.logger.info("End last commit idx: " + str(self.last_commit_idx))
 		self.config_change['last_commit_idx'] = True
 
@@ -272,31 +267,25 @@ class Log:
 	This will be called by thread periodically to apply log entries to the database
 	'''
 	def apply(self):
-		# self.logger.info("Apply called")
 
 		while True:
 			with self.lock:
 				# self.logger.info("Apply started")
-				# self.logger.info("Log size before: " + str(len(self.log)))
 				c_idx = self.last_commit_idx
 				idx = self.last_applied_idx + 1
-				# self.logger.info("Last commit idx: " + str(c_idx))
-				# self.logger.info("Starting apply index: " + str(idx))
 				while idx <= c_idx:
 					flush_res = self.flush(idx)
 					if flush_res:
 						entry = self.get(idx)
 						self.logger.info('Applying value: ' + str(entry['value']) + ' to key: ' + str(entry['key']))
 						self.database.put(entry['key'], entry['value'])
-						idx = idx + 1
 						self.last_applied_idx = self.last_applied_idx + 1
 						self.last_applied_command_per_client.update({entry['clientid']: entry['sequence_number']})
 						self.config_change['last_applied_idx'] = True
 						self.config_change['last_applied_command_per_client'] = True
 					else:
 						break
-				# self.logger.info("Ending apply index: " + str(idx))
-			# self.logger.info("Apply done. Going to sleep")
+					idx = idx + 1
 			time.sleep(100/1000)
 
 	def get(self, index):
@@ -304,7 +293,7 @@ class Log:
 		return self.log[index]
 
 	def append(self, entry):
-		self.logger.info("Append entry- key:" + str(entry['key']) + ' value: ' + str(entry['value']))
+		self.logger.info("Append entry- key: " + str(entry['key']) + ' value: ' + str(entry['value']))
 
 		with self.lock:
 			self.logger.info("Log size before: " + str(len(self.log)))
@@ -322,24 +311,18 @@ class Log:
 		self.logger.info("Insert at index: " + str(index))
 
 		with self.lock:
-			if index <= self.log_idx:
-				self.log[index] = entry
-				self.log[index]['commit_done'] = False
-				self.logger.info("Insert at index done")
-				return index
-			else:
-				self.logger.info("Log size before: " + str(len(self.log)))
-
+			if index == self.log_idx + 1:
 				self.log_idx += 1
-				self.log[self.log_idx] = entry
-				self.log[self.log_idx]['commit_done'] = False
-				self.config_change['log_idx'] = True
-
-				self.logger.info("Log size after: " + str(len(self.log)))
-				self.logger.info("Append entry done")
-			
+			elif index > self.log_idx + 1:
+				self.logger.error("index > log_idx + 1 -- must not be possible")
 				self.logger.info("Insert at index done")
-				return self.log_idx
+			self.log[index] = entry
+			self.log[index]['commit_done'] = False
+
+			self.config_change['log_idx'] = True
+
+			self.logger.info("Insert at index done")
+			return index
 
 	def is_applied(self, index):
 		self.logger.info("Is applied")
@@ -347,7 +330,7 @@ class Log:
 		return index <= self.last_applied_idx
 
 	def get_leader(self):
-		# self.logger.info("Get leader")
+		self.logger.info("Get leader")
 
 		with self.lock:
 			return self.leader_id
@@ -371,7 +354,7 @@ class Log:
 		self.logger.info("Update status done")
 
 	def get_status(self):
-		# self.logger.info("Get status")
+		self.logger.info("Get status")
 
 		return self.status
 	
@@ -385,12 +368,12 @@ class Log:
 			self.voted_for['server_id'] = self.server_id
 			self.logger.info(f"my term {self.term}, my id {self.server_id}")
 			self.logger.info(f"Updating status, voted for term {self.voted_for['term']}, voted for id {self.voted_for['server_id']}")
-		
+
 		self.config_change['voted_for'] = True
 		self.config_change['status'] = True
 		self.config_change['term'] = True	
 
-		self.logger.info("Set self candidate done")		
+		self.logger.info("Set self candidate done")
 
 	def set_self_leader(self):
 		self.logger.info("Set self leader")
@@ -404,7 +387,7 @@ class Log:
 		self.logger.info("Set self leader done")
 
 	def revert_to_follower(self, new_term, new_leader_id):
-		self.logger.info("Revert to follower")
+		self.logger.info("Checking if I need to revert to follower")
 
 		with self.lock:
 			if self.status == STATE['CANDIDATE'] or self.status == STATE['LEADER']:
@@ -415,6 +398,7 @@ class Log:
 				self.logger.info(f'Updating term from {self.term} to {new_term}')
 			if self.leader_id != new_leader_id:
 				self.logger.info(f'Updating leader id from {self.leader_id} to {new_leader_id}')
+
 			self.term = new_term
 			self.leader_id = new_leader_id
 
@@ -424,10 +408,8 @@ class Log:
 
 		self.logger.info("Revert to follower done")
 
-		self.logger.info("Revert to follower done")
-
 	def get_voted_for(self):
-		# self.logger.info("Get vorted for")
+		self.logger.info("Get vorted for")
 
 		return self.voted_for['term'], self.voted_for['server_id']
 	

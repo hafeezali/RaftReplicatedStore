@@ -14,7 +14,6 @@ class Logging:
         if not os.path.exists(log_folder_path):
             os.makedirs(log_folder_path)
         self.log_file_name = f'{log_folder_path}/{server_id}_exec_logs.txt'
-        
 
     def get_logger(self):
         logging.basicConfig(filename=self.log_file_name, 

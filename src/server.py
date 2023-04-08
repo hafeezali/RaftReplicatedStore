@@ -7,16 +7,22 @@ import os
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
+import raft.config as config
 from logger import Logging
 from threading import Thread
 
-
+'''
+TODO:
+1. Look into how max_workers should be fine-tuned? Maybe performance testing might help figure that out?
+2. What happens when we dont get majority when trying a put? We need to retry
+3. There might be some inconsistency at the db level here - Puts are happening from log, whereas gets are happening here. Do SELECT and INSERT/UPDATE overlap in sqlite3? 
+    Hopefully latching is implemented for in-mem dict by default...
+'''
 class Server(raftdb_grpc.ClientServicer):
 
     def __init__(self, type, server_id, peer_list):
 
         self.server_id = server_id
-        # who updates state? does this need be here or in election layer?
         self.logger = Logging(server_id).get_logger()
         self.store = Database(type=type, server_id=server_id, logger=self.logger)
         self.log = Log(server_id, self.store, self.logger)
@@ -28,35 +34,29 @@ class Server(raftdb_grpc.ClientServicer):
         self.consensus = Consensus(peers=peer_list, log=self.log, logger=self.logger)
 
     def Get(self, request, context):
-        # Implement leader check logic
-        # Make sure this is strongly consistent -- if we allow only one outstanding client request, the system must be strongly consistent by default
-        
+        # Strongly consistent -- if we allow only one outstanding client request, the system must be strongly consistent by default
+        self.logger("Get request received for key: " + str(request.key))
         leader_id = self.log.get_leader()
 
         if leader_id == self.server_id:
-            return raftdb.GetResponse(code = 200, value = self.store.get(request.key), leaderId = leader_id)
+            return raftdb.GetResponse(code = config.RESPONSE_CODE_OK, value = self.store.get(request.key), leaderId = leader_id)
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
-            return raftdb.GetResponse(code = 300, value = None, leaderId = leader_id)
- 
+            return raftdb.GetResponse(code = config.RESPONSE_CODE_REDIRECT, value = None, leaderId = leader_id)
 
     def Put(self, request, context):
-        # Implement leader check logic
-        # What happens when we dont get majority? Retry or fail? -- Im guessing fail and respond to client
-        # can i not just directly pass request to command?
-        # now the request also includes client id and sequence number
-
+        self.logger("Put request received for key: " + str(request.key) + ", and value: " + str(request.value) + ", from client: " + str(request.clientid))
         leader_id = self.log.get_leader()
 
         if leader_id == self.server_id:
             if self.consensus.handlePut(request) == 'OK':
-                return raftdb.PutResponse(code = 200, leaderId = leader_id)
+                return raftdb.PutResponse(code = config.RESPONSE_CODE_OK, leaderId = leader_id)
             else:
-                # add more appropriate error message
-                return raftdb.PutResponse(code = 500, leaderId = leader_id)
+                self.logger("Put request failed... Further investifation needed")
+                return raftdb.PutResponse(code = config.RESPONSE_CODE_REJECT, leaderId = leader_id)
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
-            return raftdb.PutResponse(code = 300, leaderId = leader_id)
+            return raftdb.PutResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = leader_id)
         
 
 def start_server_thread(port, grpc_server):
@@ -86,11 +86,6 @@ def serve(server):
     peer_thread.join()
 
 if __name__ == '__main__':
-    # Implement arg parse to read server arguments
-    # type = 'memory'
-    # server_id = 'server_1'
-    # client_port = '50051'
-    # raft_port = '50052'
 
     server_id = os.getenv('SERVERID')
     print(f"Starting Server {server_id}")
