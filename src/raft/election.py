@@ -25,7 +25,7 @@ class Election(raftdb_grpc.RaftElectionService):
     def run_election_service(self):
         self.logger.debug('Starting Election Timeout')
         # hack: find a cleaner way
-        start_up_time = 30
+        start_up_time = 150
         time.sleep(start_up_time)
         self.election_timeout()
 
@@ -342,6 +342,8 @@ class Election(raftdb_grpc.RaftElectionService):
             voted_for_term, voted_for_id = self.__log.get_voted_for()
             self.logger.info("voted_for_term: " + str(voted_for_term))
             self.logger.info("voted_for_id: " + str(voted_for_id))
+            self.logger.info(f'candidate id == {candidate_Id}, candidate term == {candidate_term}')
+            self.logger.info("############### VOTED FOR ##################################")
             if voted_for_term == candidate_term: 
                 # BUG: check this
                 if voted_for_id != candidate_Id:
