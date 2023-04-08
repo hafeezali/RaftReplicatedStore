@@ -28,7 +28,6 @@ class Election(raftdb_grpc.RaftElectionService):
 
     def run_election_service(self):
         self.logger.debug('Starting Election Timeout')
-        time.sleep(config.ELECTION_START_UP_TIME)
         self.election_timeout()
 
     def begin_election(self):
@@ -164,6 +163,8 @@ class Election(raftdb_grpc.RaftElectionService):
                         # timeout, will retry if we are still leader
                         self.logger.debug(f'Heartbeat failed with timeout error, peer: {follower}, {status_code} details: {e.details()}')
                     else :
+                        # Network partition can cause this. We need to sleep to avoid sending too many of these errrors
+                        time.sleep(config.HB_TIME / 2000)
                         self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
 
     def Heartbeat(self, request, context):

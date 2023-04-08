@@ -8,9 +8,8 @@ from log import Log
 from store.database import Database
 from logger import Logging
 
-# Test: recovery of db state and in-mem state. Implement clear on db. Implement shelve on im-mem db. Implement clear on in-mem db
-
-# Tested: clear, is_applied, append, commit, commit_upto, apply, get_last_committed_sequence_for, insert_at
+# Tested: clear, is_applied, append, commit, commit_upto, apply, get_last_committed_sequence_for, insert_at. 
+# Recovery of db state and in-mem state. Implement shelve on im-mem db
 
 def create_entry(key, value, term, clientid, sequence_number):
 	entry = {
@@ -93,7 +92,7 @@ def test_normal_functionality(log, db):
 	assert db.get(200) == 1002
 	return True
 
-def test_last_commit_idx(log):
+def test_last_commit_idx(log, db):
 	clientid = 2
 	sequence_number = 1
 	term = 1
@@ -104,6 +103,10 @@ def test_last_commit_idx(log):
 
 	assert idx == -1
 	assert log.debug_get_last_commit_idx() == -1
+
+	# clear must have run on db as well. Fetching old data should fail now
+	assert db.get(100) == None
+	assert db.get(300) == None
 
 	# append first entry
 	idx = log.append(create_entry(100, 2001, term, clientid, sequence_number))
@@ -146,7 +149,7 @@ def test_last_commit_idx(log):
 	return True
 
 # to be called only after test_last_commit_idx()
-def test_recovery(log):
+def test_recovery(log, db):
 	time.sleep(1000/1000)
 	assert log.get_log_idx() == 3
 	assert log.debug_get_last_commit_idx() == 3
@@ -154,6 +157,10 @@ def test_recovery(log):
 	assert log.get_last_committed_sequence_for(2) == 2
 	assert log.get_last_committed_sequence_for(1) == 3
 	assert log.get_last_committed_sequence_for(3) == 4
+
+	# recovery should have occurred on db as well
+	assert db.get(100) == 3001
+	assert db.get(300) == 1003
 
 	# append entry
 
@@ -228,12 +235,13 @@ if __name__ == '__main__':
 	if test_normal_functionality(log, db):
 		print('normal functionality test passed')
 
-	if test_last_commit_idx(log):
+	if test_last_commit_idx(log, db):
 		print('last commit idx test passed')
 
+	db = Database(server_id = 'server_1', logger = logger, type = 'sqlite3')
 	log = Log('server_1', db, logger)
 
-	if test_recovery(log):
+	if test_recovery(log, db):
 		print('test recovery passed')
 
 	if test_insert_at(log):
@@ -245,12 +253,13 @@ if __name__ == '__main__':
 	if test_normal_functionality(log, db):
 		print('normal functionality test passed')
 
-	if test_last_commit_idx(log):
+	if test_last_commit_idx(log, db):
 		print('last commit idx test passed')
 
+	db = Database(server_id = 'server_1', type = 'memory', logger = logger)
 	log = Log('server_1', db, logger)
 
-	if test_recovery(log):
+	if test_recovery(log, db):
 		print('test recovery passed')
 
 	if test_insert_at(log):

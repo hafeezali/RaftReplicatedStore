@@ -114,6 +114,8 @@ class Log:
 		log_file.close()
 		config_file.close()
 
+		self.database.clear_backup()
+
 		self.logger.info("Clear log backup done")
 
 	'''
@@ -394,18 +396,17 @@ class Log:
 			if self.status == STATE['CANDIDATE'] or self.status == STATE['LEADER']:
 				self.logger.info(f'Reverting to follower from {self.status}')
 				self.status = STATE['FOLLOWER']
+				self.config_change['status'] = True
 			
 			if self.term != new_term:
 				self.logger.info(f'Updating term from {self.term} to {new_term}')
+				self.term = new_term
+				self.config_change['term'] = True
+
 			if self.leader_id != new_leader_id:
 				self.logger.info(f'Updating leader id from {self.leader_id} to {new_leader_id}')
-
-			self.term = new_term
-			self.leader_id = new_leader_id
-
-			self.config_change['status'] = True
-			self.config_change['leader_id'] = True
-			self.config_change['term'] = True
+				self.leader_id = new_leader_id
+				self.config_change['leader_id'] = True
 
 		self.logger.info("Revert to follower done")
 
@@ -427,7 +428,7 @@ class Log:
 		self.logger.info("Case vote done")
 			
 	def get_last_committed_sequence_for(self, client_id):
-		self.logger.info("Get last committed sequence for")
+		self.logger.info("Get last committed sequence for: " + str(client_id))
 
 		with self.lock:
 			if client_id in self.last_applied_command_per_client:
@@ -450,7 +451,7 @@ class Log:
 	def debug_print_log(self):
 		self.logger.info("Debug print log")
 		for key in self.log:
-			self.logger.info(str(key) + " : " + str(self.log[key]['value']))
+			self.logger.info("Index: " + str(key) + "- " +str(self.log[key]['key']) + " : " + str(self.log[key]['value']))
 		self.logger.info("Debug print log done")
 
 	def debug_get_last_commit_idx(self):

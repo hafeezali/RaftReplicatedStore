@@ -86,7 +86,6 @@ class Client:
 						
 					else:
 						print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
-						break
 				except grpc.RpcError as e:
 					status_code = e.code()
 					if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
