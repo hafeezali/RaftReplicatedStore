@@ -290,7 +290,7 @@ class Log:
 						self.database.put(entry['key'], entry['value'])
 						idx = idx + 1
 						self.last_applied_idx = self.last_applied_idx + 1
-						self.last_applied_command_per_client.update({entry['clientid']: idx})
+						self.last_applied_command_per_client.update({entry['clientid']: entry['sequence_number']})
 						self.config_change['last_applied_idx'] = True
 						self.config_change['last_applied_command_per_client'] = True
 					else:
@@ -328,7 +328,16 @@ class Log:
 				self.logger.info("Insert at index done")
 				return index
 			else:
-				self.append(entry)
+				self.logger.info("Log size before: " + str(len(self.log)))
+
+				self.log_idx += 1
+				self.log[self.log_idx] = entry
+				self.log[self.log_idx]['commit_done'] = False
+				self.config_change['log_idx'] = True
+
+				self.logger.info("Log size after: " + str(len(self.log)))
+				self.logger.info("Append entry done")
+			
 				self.logger.info("Insert at index done")
 				return self.log_idx
 
