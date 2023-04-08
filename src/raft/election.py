@@ -11,8 +11,10 @@ from logs.log import Log
 
 '''
 TODO:
-1. Still possible that update votes can be called by two concurrent threads when node just became leader by one of the threads. Just adding a status check should fix the issue
-2. There was some type case issue in RequestVote around candidate_term and voter_term
+1. [Done] Still possible that update votes can be called by two concurrent threads when node just became leader by one of the threads. Just adding a status check should fix the issue
+2. [Unable to reproduce] There was some type case issue in RequestVote around candidate_term and voter_term
+3. [Done] If candidate term > voter term, check logs before sending vote
+4. [Done] If we send a vote, set leader id to None since we are updating our term, will find out leader through heartbeat
 '''
 class Election(raftdb_grpc.RaftElectionService):
 
@@ -115,7 +117,7 @@ class Election(raftdb_grpc.RaftElectionService):
     def update_votes(self):
         self.logger.info("Updating number of votes")
         self.increment_num_votes()
-        if self.get_num_votes() >= self.majority:
+        if self.get_num_votes() >= self.majority and self.__log.get_status() == config.STATE['CANDIDATE']:
             self.logger.info(f'Received majority of votes for term {self.__log.get_term()}')
             self.__log.set_self_leader()
             self.elected_leader()
@@ -260,6 +262,25 @@ class Election(raftdb_grpc.RaftElectionService):
                     else :
                         self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
 
+    def check_completeness_of_log(self, voter_last_log_term, voter_last_log_index,
+                                        candidate_last_log_term, candidate_last_log_index,
+                                        candidate_id, candidate_term):
+
+        # Check log to see if candidate's is more complete than ours
+        if voter_last_log_term < candidate_last_log_term or \
+            (voter_last_log_term == candidate_last_log_term and voter_last_log_index <= candidate_last_log_index): 
+            self.reset_election_timeout()
+
+            self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_id}')
+            self.__log.cast_vote(candidate_term, candidate_id)
+            ## Since we are casting vote, at this point we don't know who the leader for this term is 
+            self.__log.update_leader(None)
+            return raftdb.VoteResponse(success = True, term = self.__log.get_term(), leaderId = self.__log.get_leader())                
+        else:
+            self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_id}')
+            return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
+                
+
     def RequestVote(self, request, context):
         '''
         Decide whether to vote for candidate or not on receiving request vote RPC.
@@ -298,11 +319,15 @@ class Election(raftdb_grpc.RaftElectionService):
             self.logger.debug(f'voter last log term not zero, getting term from log')
             voter_last_log_term = self.__log.get(voter_last_log_index)['term']
 
+
+        # Decide if we are giving a vote to candidate
         if candidate_term > voter_term:
             # Step down if we are the leader or candidate    
-            self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_Id}')
-            self.__log.revert_to_follower(candidate_term, candidate_Id)
-            return raftdb.VoteResponse(success = True, term = candidate_term, leaderId = candidate_Id)
+            self.__log.revert_to_follower(candidate_term, None)
+            # check our logs to see if they are more complete than the candidate's 
+            return self.check_completeness_of_log(voter_last_log_term, voter_last_log_index,
+                                        candidate_last_log_term, candidate_last_log_index,
+                                        candidate_Id, candidate_term)
 
         elif candidate_term < voter_term:
 
@@ -327,18 +352,12 @@ class Election(raftdb_grpc.RaftElectionService):
             elif voted_for_term < candidate_term or \
                 (voted_for_term == candidate_term and voted_for_id == candidate_Id): 
                 # We have not voted for anyone in this term, or we have already voted for this candidate
-                
+                # If we are candidate for this term or leader, we would have already voted for ourself,
+                # So at this point we are already follower.
                 # Check log to see if candidate's is more complete than ours
-                if voter_last_log_term < candidate_last_log_term or \
-                    (voter_last_log_term == candidate_last_log_term and voter_last_log_index <= candidate_last_log_index): 
-                    self.reset_election_timeout()
-
-                    self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_Id}')
-                    self.__log.cast_vote(candidate_term, candidate_Id)
-                    return raftdb.VoteResponse(success = True, term = self.__log.get_term(), leaderId = self.__log.get_leader())                
-                else:
-                    self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
-                    return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
+                return self.check_completeness_of_log(voter_last_log_term, voter_last_log_index,
+                                        candidate_last_log_term, candidate_last_log_index,
+                                        candidate_Id, candidate_term)
             else:
                 self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
                 return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())

@@ -60,39 +60,39 @@ class Client:
 					print(f'Some other error, details: {status_code} {e.details()}') 
 
 	def requestPut(self, key, value, clientid, sequence_number):
-			with grpc.insecure_channel(self.server_addr) as channel:
-				stub = raftdb_grpc.ClientStub(channel)
-				request = raftdb.PutRequest(key=key, value=value, clientid = clientid, sequence_number = sequence_number)
-				
-				try:
+		with grpc.insecure_channel(self.server_addr) as channel:
+			stub = raftdb_grpc.ClientStub(channel)
+			request = raftdb.PutRequest(key=key, value=value, clientid = clientid, sequence_number = sequence_number)
+			
+			try:
+				response = stub.Put(request, timeout=config.RPC_TIMEOUT)
+
+				leader_id = response.leaderId
+				print(leader_id)
+				while response.code == config.RESPONSE_CODE_REDIRECT and (leader_id == None or leader_id == '') :
+					print('Waiting for election to happen')
+					time.sleep(40)
 					response = stub.Put(request, timeout=config.RPC_TIMEOUT)
-
 					leader_id = response.leaderId
-					print(leader_id)
-					while response.code == config.RESPONSE_CODE_REDIRECT and (leader_id == None or leader_id == '') :
-						print('Waiting for election to happen')
-						time.sleep(40)
-						response = stub.Put(request, timeout=config.RPC_TIMEOUT)
-						leader_id = response.leaderId
 
-					if response.code == config.RESPONSE_CODE_REDIRECT :
-						time.sleep(20)
-						response = self.redirectToLeaderPut(response.leaderId.replace("'", ""), key, value, clientid, sequence_number)
-					elif response.code == config.RESPONSE_CODE_OK:
-						print(f"Put of key: {key}, value: {value} succeeded!\n")
+				if response.code == config.RESPONSE_CODE_REDIRECT :
+					time.sleep(20)
+					response = self.redirectToLeaderPut(response.leaderId.replace("'", ""), key, value, clientid, sequence_number)
+				elif response.code == config.RESPONSE_CODE_OK:
+					print(f"Put of key: {key}, value: {value} succeeded!\n")
 
-					elif response.code == config.RESPONSE_CODE_REJECT:
-						print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
-						
-					else:
-						print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
-						break
-				except grpc.RpcError as e:
-					status_code = e.code()
-					if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
-						print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
-					else :
-						print(f'Some other error, details: {status_code} {e.details()}')	
+				elif response.code == config.RESPONSE_CODE_REJECT:
+					print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
+					
+				else:
+					print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
+					
+			except grpc.RpcError as e:
+				status_code = e.code()
+				if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+					print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
+				else :
+					print(f'Some other error, details: {status_code} {e.details()}')	
 
 
 if __name__ == '__main__':

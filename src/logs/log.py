@@ -388,6 +388,9 @@ class Log:
 		self.logger.info("Set self leader done")
 
 	def revert_to_follower(self, new_term, new_leader_id):
+		## If we are reverting to follower because we have cast a vote, we will set our term to new term
+		## but we will set leader ID to None because we don't know if they actually won the election yet
+		
 		self.logger.info("Checking if I need to revert to follower")
 
 		with self.lock:
