@@ -155,7 +155,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         self.logger.debug('I am the appendEntry handler')
         if request.term < self.__log.get_term() :
             self.logger.debug('I am the appendEntry handler, my term is greater than the server term')
-            return raftdb.LogEntryResponse(code=300, term = self.__log.get_term())
+            return raftdb.LogEntryResponse(code=500, term = self.__log.get_term())
             
         if request.prev_term == -1 and request.prev_log_index == -1:
             # delete follower log if master log is empty
