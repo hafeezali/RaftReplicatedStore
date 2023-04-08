@@ -2,6 +2,11 @@ import sqlite3
 
 from os import path, getenv, makedirs
 
+'''
+TODO:
+1. Implement persistence of SqliteStore
+2. Implement recovery of SqliteStore
+'''
 class SqliteStore:
 
 	def __init__(self, store_name, logger):
