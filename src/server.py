@@ -55,10 +55,11 @@ class Server(raftdb_grpc.ClientServicer):
             if response == 'OK':
                 return raftdb.PutResponse(code = config.RESPONSE_CODE_OK, leaderId = leader_id)
             else:
-                # Reverted to follower, so redirect
-                if response == '500 ':
-                    self.logger.info("Put request failed... Redirecting it to follower")
-                return raftdb.PutResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = self.log.get_leader())
+                # Only scenario we will get 500 (config.RESPONSE_CODE_REJECT) is when node has become follower when previously it was leader
+                if response == config.RESPONSE_CODE_REJECT:
+
+                    self.logger.info("Put request failed... Redirecting it to new leader")
+                    return raftdb.PutResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = self.log.get_leader())
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
             return raftdb.PutResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = leader_id)

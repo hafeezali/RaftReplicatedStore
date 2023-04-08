@@ -73,7 +73,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         
         while self.ready_to_commit[key]!= 1 and self.__log.get_status() == config.STATE['LEADER']:
             time.sleep(100/1000)
-            self.logger.debug("Waiting for responses from followers for key: " + str(entry.key) + ", value: " + str(entry.value)) 
+            # self.logger.debug("Waiting for responses from followers for key: " + str(entry.key) + ", value: " + str(entry.value)) 
 
         
 
@@ -86,15 +86,16 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
             while self.__log.is_applied(log_index_to_commit) :
                 time.sleep(100/1000)
-                self.logger.info("Waiting for log to commit entry for key: " + str(entry.key))
+                # self.logger.info("Waiting for log to commit entry for key: " + str(entry.key))
 
             return 'OK'
 
+        # This happens when election starts after broadcasting
         if self.__log.get_status() != config.STATE['LEADER'] :
-            return '500'
+            return config.RESPONSE_CODE_REJECT
    
 
-    def create_log_entry_request(self, prev_log_index, entry):
+    def create_log_entry_request(self, prev_log_index):
         self.logger.debug("Creating log entry request for index: " + str(prev_log_index + 1))
 
         prev_term = -1
@@ -129,7 +130,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             stub = raftdb_grpc.ConsensusStub(channel)
 
             prev_log_index = log_index_to_commit - 1
-            request = self.create_log_entry_request(prev_log_index, entry)
+            request = self.create_log_entry_request(prev_log_index)
 
             try:
                 response = stub.AppendEntries(request)
@@ -140,29 +141,31 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                     # out of the loop.
                     if response.code == config.RESPONSE_CODE_REDIRECT:
                         self.logger.debug('There is a server with larger term, updating term and status')
-                        self.__log.revert_to_follower(response.term, follower)
+                        self.__log.update_term(response.term)
+                        self.__log.update_status(config.STATE['FOLLOWER'])
                         break
                     self.logger.debug('The entry is not matching the corresponding entry in the follower log')
                     prev_log_index = prev_log_index - 1
-                    request = self.create_log_entry_request(prev_log_index, entry)
+                    request = self.create_log_entry_request(prev_log_index)
                     response = stub.AppendEntries(request)
                        
 
                 #    correcting the log entry
-                while prev_log_index < log_index_to_commit - 1:
-                    self.logger.debug(f'Stuck here')
+                while prev_log_index <= log_index_to_commit - 1:
+                    # self.logger.debug(f'Stuck here')
                     # if it recieves an append entry response with higher term, it will revert to follower and break 
                     # out of the loop.
                     if response.code == config.RESPONSE_CODE_REDIRECT:
                         self.logger.debug('There is a server with larger term, updating term and status')
-                        self.__log.revert_to_follower(response.term, follower)
+                        self.__log.update_term(response.term)
+                        self.__log.update_status(config.STATE['FOLLOWER'])
                         break
                         
                     if response.code == config.RESPONSE_CODE_OK :
-                        self.logger.debug('here')
+                        # self.logger.debug('here')
                         self.logger.debug('Inserting correct entry in the server log')
                         prev_log_index = prev_log_index + 1
-                        request = self.create_log_entry_request(prev_log_index, entry)
+                        request = self.create_log_entry_request(prev_log_index)
                         response = stub.AppendEntries(request)    
                 
                 # only adding to majority if the node has correctly appended it's log
@@ -170,11 +173,12 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                     key = (entry.clientid, entry.sequence_number)
                     majority = (len(self.__peers))/2 + 1
                     with self.lock :
-                        self.logger.debug('Log corrected for key: ' + str(entry.key) + 'adding to majority')
+                        self.logger.debug('Log appended for key: ' + str(entry.key) + 'adding to majority')
                         self.majority_counter[key] += 1
 
-                        if self.majority_counter[key] >= majority :
+                        if self.majority_counter[key] >= majority and key in self.ready_to_commit:
                             self.ready_to_commit[key] = 1
+            
             except grpc.RpcError as e:
                 status_code = e.code()
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
