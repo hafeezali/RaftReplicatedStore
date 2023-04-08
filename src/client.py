@@ -11,36 +11,41 @@ class Client:
 	def __init__(self):
 		self.server_addr = 'localhost:50051'
 
-	def redirectToLeader(self, leader_id):
+	def redirectToLeaderGet(self, leader_id, key):
 		print(leader_id)
 		self.server_addr = peer_list_mappings[leader_id]
+		return self.requestGet(key)
+		
+	def redirectToLeaderPut(self, leader_id, key,value, clientid, sequence_number):
+		print(leader_id)
+		self.server_addr = peer_list_mappings[leader_id]
+		return self.requestPut(key, value, clientid, sequence_number)	
 
 	def requestGet(self, key):
 		# implement server update logic
-		while True:
 			with grpc.insecure_channel(self.server_addr) as channel:
 				stub = raftdb_grpc.ClientStub(channel)
 				request = raftdb.GetRequest(key=key)
 
 				try:
-					response = stub.Get(request, timeout=100)
-
+					response = stub.Get(request, timeout=config.RPC_TIMEOUT)
 					leader_id = response.leaderId
-
-					if response.code == config.RESPONSE_CODE_REDIRECT:
-						print(f"REDIRECT - {leader_id}")
-						if leader_id == None or leader_id == '':
-							time.sleep(config.CLIENT_SLEEP_TIME)
-						else:
-							self.redirectToLeader(response.leaderId.replace("'", ""))
+					print(leader_id)
+					while response.code == config.RESPONSE_CODE_REDIRECT and (leader_id == None or leader_id == '') :
+						print('Waiting for election to happen')
+						time.sleep(40)
+						response = stub.Get(request, timeout=config.RPC_TIMEOUT)
+						leader_id = response.leaderId
+						
+					if response.code == config.RESPONSE_CODE_REDIRECT :
+						response = self.redirectToLeaderGet(response.leaderId.replace("'", ""), key)
 
 					elif response.code == config.RESPONSE_CODE_OK:
 						print(f"GET for key: {key} Succeeded, value: {response.value}\n")
 						# print(response.value)
-						break
 					else:
 						print("Something went wrong, exiting put method\n")
-						break
+						
 				except grpc.RpcError as e:
 					status_code = e.code()
 					if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
@@ -53,7 +58,6 @@ class Client:
 
 	def requestPut(self, key, value, clientid, sequence_number):
 		# implement server update logic
-		while True:
 			with grpc.insecure_channel(self.server_addr) as channel:
 				stub = raftdb_grpc.ClientStub(channel)
 				request = raftdb.PutRequest(key=key, value=value, clientid = clientid,sequence_number = sequence_number )
@@ -62,29 +66,34 @@ class Client:
 					response = stub.Put(request, timeout=config.RPC_TIMEOUT)
 
 					leader_id = response.leaderId
-
-					if response.code == config.RESPONSE_CODE_REDIRECT:
-						if leader_id == None or leader_id == '':
-							time.sleep(config.CLIENT_SLEEP_TIME)
-						else:
-							self.redirectToLeader(response.leaderId.replace("'", ""))
-							# Then code will retry automatically
+					print(leader_id)
+					while response.code == config.RESPONSE_CODE_REDIRECT and (leader_id == None or leader_id == '') :
+						print('Waiting for election to happen')
+						time.sleep(40)
+						response = stub.Put(request, timeout=config.RPC_TIMEOUT)
+						leader_id = response.leaderId
+						
+					if response.code == config.RESPONSE_CODE_REDIRECT :
+						time.sleep(20)
+						response = self.redirectToLeaderPut(response.leaderId.replace("'", ""), key, value, clientid, sequence_number)
 
 					elif response.code == config.RESPONSE_CODE_OK:
 						print(f"Put of key: {key}, value: {value} succeeded!\n")
-						break
+						
 					elif response.code == config.RESPONSE_CODE_REJECT:
 						print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
-						break
+						
 					else:
 						print("Something went wrong, exiting put method\n")
-						break
+						
 
 				except grpc.RpcError as e:
 					status_code = e.code()
 					if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                         # timeout, will retry if we are still leader
 						print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
+					else :
+						print(f'Some other error, details: {status_code} {e.details()}')	
 
 
 

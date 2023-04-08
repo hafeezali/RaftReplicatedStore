@@ -45,16 +45,14 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                             'term' : self.__log.get_term(),
                             'clientid': entry.clientid,
                             'sequence_number' : entry.sequence_number})
-        # with concurrent.futures.ThreadPoolExecutor() as executor:
-        #     responses = []
-        #     for follower in self.__peers:
-        #         responses.append(
-        #                 executor.submit(
-        #                 self.broadcastEntry, follower = follower, entry = entry, log_index_to_commit = log_index_to_commit
-        #             )
-        #         )
-        for follower in self.__peers:
-            Thread(target=self.broadcastEntry, args=(follower,entry,log_index_to_commit,)).start()      
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            responses = []
+            for follower in self.__peers:
+                responses.append(
+                        executor.submit(
+                        self.broadcastEntry, follower = follower, entry = entry, log_index_to_commit = log_index_to_commit
+                    )
+                )
             # when do the executors start? on submit? If so, the append entries aren't sent in parallel
             self.logger.debug('Broadcasting append entries')
             
@@ -66,7 +64,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             self.logger.debug(f'Committing the entry {entry}')
             self.__log.commit(log_index_to_commit)
             while self.__log.is_applied(log_index_to_commit) :
-                time.sleep(100)
+                time.sleep(10)
                 print("waiting to go to db")
             self.logger.debug(f'Applying the entry {entry} to the state machine')
             return 'OK'
@@ -157,7 +155,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         self.logger.debug('I am the appendEntry handler')
         if request.term < self.__log.get_term() :
             self.logger.debug('I am the appendEntry handler, my term is greater than the server term')
-            return raftdb.LogEntryResponse(code=500, term = self.__log.get_term())
+            return raftdb.LogEntryResponse(code=300, term = self.__log.get_term())
             
         if request.prev_term == -1 and request.prev_log_index == -1:
             # delete follower log if master log is empty
