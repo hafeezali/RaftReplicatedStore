@@ -35,7 +35,7 @@ class Server(raftdb_grpc.ClientServicer):
 
     def Get(self, request, context):
         # Strongly consistent -- if we allow only one outstanding client request, the system must be strongly consistent by default
-        self.logger("Get request received for key: " + str(request.key))
+        self.logger.info("Get request received for key: " + str(request.key))
         leader_id = self.log.get_leader()
 
         if leader_id == self.server_id:
@@ -45,14 +45,14 @@ class Server(raftdb_grpc.ClientServicer):
             return raftdb.GetResponse(code = config.RESPONSE_CODE_REDIRECT, value = None, leaderId = leader_id)
 
     def Put(self, request, context):
-        self.logger("Put request received for key: " + str(request.key) + ", and value: " + str(request.value) + ", from client: " + str(request.clientid))
+        self.logger.info("Put request received for key: " + str(request.key) + ", and value: " + str(request.value) + ", from client: " + str(request.clientid))
         leader_id = self.log.get_leader()
 
         if leader_id == self.server_id:
             if self.consensus.handlePut(request) == 'OK':
                 return raftdb.PutResponse(code = config.RESPONSE_CODE_OK, leaderId = leader_id)
             else:
-                self.logger("Put request failed... Further investifation needed")
+                self.logger.info("Put request failed... Further investifation needed")
                 return raftdb.PutResponse(code = config.RESPONSE_CODE_REJECT, leaderId = leader_id)
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")

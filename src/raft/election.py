@@ -9,7 +9,11 @@ import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
 from logs.log import Log
 
-
+'''
+TODO:
+1. Still possible that update votes can be called by two concurrent threads when node just became leader by one of the threads. Just adding a status check should fix the issue
+2. There was some type case issue in RequestVote around candidate_term and voter_term
+'''
 class Election(raftdb_grpc.RaftElectionService):
 
     def __init__(self, peers: list, log: Log, serverId: int, logger):
@@ -24,13 +28,9 @@ class Election(raftdb_grpc.RaftElectionService):
 
     def run_election_service(self):
         self.logger.debug('Starting Election Timeout')
-        # hack: find a cleaner way
-        start_up_time = 150
-        time.sleep(start_up_time)
+        time.sleep(config.ELECTION_START_UP_TIME)
         self.election_timeout()
 
-
-    # What triggers an election when leader dies? Should there be a thread that keep track of heartbeats and server state and triggers an election accordingly?
     def begin_election(self):
         '''
         Once the election timeout has passed, this function starts the leader election
@@ -57,7 +57,6 @@ class Election(raftdb_grpc.RaftElectionService):
         Wait for timeout before starting an election incase we get heartbeat from a leader
         '''
         try:
-
             self.logger.info('Waiting for Election timeout')
 
             if self.timeout_thread and self.timeout_thread.is_alive():
@@ -81,14 +80,11 @@ class Election(raftdb_grpc.RaftElectionService):
         '''
         If we get a heartbeat from the leader, reset election timeout
         '''
-
         self.logger.debug('Resetting Election Timeout')
         self.election_timeout_time = self.random_timeout()
         self.election_time = time.time() + self.election_timeout_time
+        self.logger.info('New election timeout time: ' + str(self.election_timeout_time))
 
-
-    # BUG
-    # Todo: check this again later...
     def follower_loop(self):
         '''
         Followers execute this loop, and wait for heartbeats from leader
@@ -97,6 +93,7 @@ class Election(raftdb_grpc.RaftElectionService):
         while self.__log.get_status() != config.STATE['LEADER']:
             self.reset_election_timeout()
             time_since_last_heartbeat = time.time() - self.last_heartbeat_time
+            self.logger.info('Time since last heartbeat: ' + str(time_since_last_heartbeat))
             if time_since_last_heartbeat > self.election_timeout_time:
                 if self.peers:
                     self.begin_election()
@@ -115,30 +112,24 @@ class Election(raftdb_grpc.RaftElectionService):
         with self.election_lock:
             self.num_votes = 0
 
-    # BUG: If n vote responses come simultaenously, then this can get called for n threads, and we can start n heartbeat threads for each follower
-    # We need a lock here --- ADDED
     def update_votes(self):
+        self.logger.info("Updating number of votes")
         self.increment_num_votes()
         if self.get_num_votes() >= self.majority:
             self.logger.info(f'Received majority of votes for term {self.__log.get_term()}')
-            # why is this lock even needed here? what is the significance? The election process is run by only one thread no?
             self.__log.set_self_leader()
             self.elected_leader()
-
 
     def elected_leader(self):
         '''
         If this node is elected as the leader, start sending
         heartbeats to the follower nodes
         '''
-
         self.logger.info(f'Elected leader!!! for term {self.__log.get_term()}')
         for peer in self.peers:
             Thread(target=self.sendHeartbeat, args=(peer,)).start()
 
-        
     def sendHeartbeat(self, follower):
-        # To send heartbeats
         term = self.__log.get_term()
         self.logger.info(f'Sending heartbeat for term {term} to {follower}')
         with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
@@ -154,8 +145,6 @@ class Election(raftdb_grpc.RaftElectionService):
                     response = stub.Heartbeat(request, timeout=config.RPC_TIMEOUT)
 
                     if response.code != config.RESPONSE_CODE_OK:
-                    # In what scenario can we get a code != 200? Is there a timeout on these rpcs? What if the node is down? Due to membership change or just node crash for extended duration? 
-                    # Need heartbeat response from append entries, added term proto to be sent back
                         if response.term > self.__log.get_term():
                             # We are not the most up to date term, revert to follower
                             # Our heartbeat was rejected, so update leader ID to current leader
@@ -177,14 +166,9 @@ class Election(raftdb_grpc.RaftElectionService):
                     else :
                         self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
 
-
-
-    # Heartbeat RPC Handler
-    # Executed by follower
     def Heartbeat(self, request, context):
         '''
         Check the term of the sender. If sender term is greater than ours,
-
         if we are candidate or leader, immediately set our state to follower
 
         If our term is less or equal (and we are not the leader), return 200
@@ -209,7 +193,6 @@ class Election(raftdb_grpc.RaftElectionService):
             return raftdb.HeartbeatResponse(code = config.RESPONSE_CODE_OK,
                                             term = sender_term,
                                             leaderId= self.__log.get_leader())
-        
         else:
             # return the leader ID we have to the peer sending heartbeat, so it can 
             # update its own leader id since it will revert to follower.
@@ -225,8 +208,6 @@ class Election(raftdb_grpc.RaftElectionService):
         for peer in self.peers:
             Thread(target=self.send_vote_request, args=(peer, term)).start()
             
-
-    # BUG: vote is cast after becoming leader.
     def send_vote_request(self, voter: str, term: int):
   
         # Assumption is this idx wont increase when sending heartbeats right?
@@ -239,8 +220,6 @@ class Election(raftdb_grpc.RaftElectionService):
             candidate_last_log_term = 0
         else:
             candidate_last_log_term = self.__log.get(candidate_last_log_index)['term']
-        
-        
 
         while self.__log.get_status() == config.STATE['CANDIDATE'] and self.__log.get_term() == candidate_term:
             
@@ -256,10 +235,8 @@ class Election(raftdb_grpc.RaftElectionService):
                                      lastLogIndex = candidate_last_log_index,
                                      candidateId = self.serverId)
                     vote_response = stub.RequestVote(request, timeout = config.RPC_TIMEOUT)
-                    # vote_response = stub.RequestVote(request)
 
                     self.logger.info(f'Vote Response for term {term} is {vote_response}')
-                    # can this thread become dangling when a node dies? in a scneario where we never get a vote response back?
                     if vote_response:
                         vote = vote_response.success
                         if vote == True and self.__log.get_status() == config.STATE['CANDIDATE']:
@@ -283,12 +260,9 @@ class Election(raftdb_grpc.RaftElectionService):
                     else :
                         self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
 
-    # where is the RequestVode handler?
-    # RPC Request Vote Handler
-    # Executed by Follower
     def RequestVote(self, request, context):
         '''
-        # Decide whether to vote for candidate or not on receiving request vote RPC.
+        Decide whether to vote for candidate or not on receiving request vote RPC.
 
         If candidateCurrentTerm > voterCurrentTerm, set voterCurrentTerm ← candidateCurrentTerm
         (step down if leader or candidate)
@@ -310,15 +284,14 @@ class Election(raftdb_grpc.RaftElectionService):
         self.logger.info(f'Received vote request for term: {candidate_term} from {candidate_Id}')
         self.logger.info(f'Candidate last log term: {candidate_last_log_term}, last log index {candidate_last_log_index}')
        
-        # what's with so many election timeouts here?
         # Reset election timeout so that the follower does not immediately start a new election
         self.reset_election_timeout()
+
         voter_term = self.__log.get_term()
         voter_last_log_index = self.__log.get_log_idx()
-        # can just get the term from log.term -- not the same!!
+        
         self.logger.debug(f'voter term {voter_term}, voter log index {voter_last_log_index}')
         if voter_last_log_index == -1 : 
-
             self.logger.debug(f'voter last log index is -1, setting last log term to 0')
             voter_last_log_term = 0
         else:
@@ -344,8 +317,7 @@ class Election(raftdb_grpc.RaftElectionService):
             self.logger.info("voted_for_id: " + str(voted_for_id))
             self.logger.info(f'candidate id == {candidate_Id}, candidate term == {candidate_term}')
             self.logger.info("############### VOTED FOR ##################################")
-            if voted_for_term == candidate_term: 
-                # BUG: check this
+            if voted_for_term == candidate_term:
                 if voted_for_id != candidate_Id:
                     # already voted for someone else
 
@@ -360,18 +332,13 @@ class Election(raftdb_grpc.RaftElectionService):
                 if voter_last_log_term < candidate_last_log_term or \
                     (voter_last_log_term == candidate_last_log_term and voter_last_log_index <= candidate_last_log_index): 
                     self.reset_election_timeout()
-                    # this update should probably happen in the log layer
-                    # Actually, why is it that we're updating term here? What is the exact reason? Perhaps can be used by consensus to decide whethere to accept entry or not but that can done in other ways. Is there any other reason? In an election, a node can vote for multiple leaders anyway right?
-                    # Only one will get majority I think... No? 
 
                     self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_Id}')
                     self.__log.cast_vote(candidate_term, candidate_Id)
-                    return raftdb.VoteResponse(success = True, term = self.__log.get_term(), leaderId = self.__log.get_leader())
-                
+                    return raftdb.VoteResponse(success = True, term = self.__log.get_term(), leaderId = self.__log.get_leader())                
                 else:
                     self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
                     return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
-                
             else:
                 self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
                 return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
