@@ -74,10 +74,10 @@ def serve(server):
     client_port = '50051'
     peer_port = '50052'
     
-    grpc_client_server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
+    grpc_client_server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
     raftdb_grpc.add_ClientServicer_to_server(server, grpc_client_server)
 
-    grpc_peer_server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
+    grpc_peer_server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
     raftdb_grpc.add_RaftElectionServiceServicer_to_server(server.election, grpc_peer_server)
     raftdb_grpc.add_ConsensusServicer_to_server(server.consensus, grpc_peer_server)
     

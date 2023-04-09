@@ -211,7 +211,7 @@ class Log:
 		with self.lock:
 			self.log[index]['commit_done'] = True
 			self.logger.info("Start commit index: " + str(self.last_commit_idx))
-			while self.last_commit_idx + 1 <= self.log_idx and self.log[self.last_commit_idx+1]['commit_done'] is True:
+			while self.last_commit_idx + 1 <= index:
 				self.last_commit_idx += 1
 			self.logger.info("End commit index: " + str(self.last_commit_idx))
 			self.config_change['last_commit_idx'] = True
