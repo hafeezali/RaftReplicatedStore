@@ -170,17 +170,33 @@ class Log:
 
 		self.logger.info("Recover done")
 
+	def debug_check_log_file(self, log_file):
+		if not log_file:
+		    print("Error: Failed to create log file")
+		else:
+		    # Inspect the contents of the file
+		    print("Log file contents:")
+		    for key, value in log_file.items():
+		        print(f"{key}: {value}")
+
 	'''
 	Flush entry at index to disk
 	'''
 	def flush(self, index):
 		self.logger.info("Flush for index: " + str(index))
 
-		log_file = shelve.open(self.log_path, 'c', writeback=True)
-		log_file[str(index)] = self.log[index]
-		log_file.close()
+		try:
+			log_file = shelve.open(self.log_path, 'c', writeback=True)
+			self.debug_check_log_file(log_file)
+			self.logger.info("Trying to persist: " + str(self.log[index]))
+			log_file[str(index)] = self.log[index]
+			self.logger.info("now im here")
+			log_file.close()
+		except Exception as e:
+			self.logger.info(f'Exception, details: {e.details()}') 
+			return True
 
-		self.logger.info("Flush done")
+		# self.logger.info("Flush done")
 		return True
 
 	'''
