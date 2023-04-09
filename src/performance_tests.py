@@ -7,7 +7,7 @@ import random
 import argparse
 from numpy import mean
 
-from client import Client
+from client_perf import ClientPerf
 
 peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:50053', 'server-3': 'localhost:50055'}
 
@@ -17,18 +17,19 @@ TODO:
 '''
 class PerformanceTests:
 
-    def __init__(self, client: Client):
+    def __init__(self, client: ClientPerf):
         self.client = client
         self.client_id = 2
-        self.num_elements = 100
+        self.num_elements = 2
 
     def test_get_latency(self):
+        print("Testing GET Latency")
         get_latencies = []
         for i in range(self.num_elements):
             response = (False, -1)
             start_time = time.time()
             while response[0] == False:
-                response = self.client.requestGet()
+                response = self.client.requestGet(i)
             end_time = time.time()
             elapsed_time = start_time - end_time
             get_latencies.append(elapsed_time)
@@ -39,6 +40,7 @@ class PerformanceTests:
         print("Average Time for GET: " + str(mean(get_latencies)))
 
     def add_items_to_store(self):
+        print("Testing PUT Latency")
         put_latencies = []
         
         # Create a list of 100 random numbers between 10 and 30
@@ -48,7 +50,7 @@ class PerformanceTests:
             response = False
             start_time = time.time()
             while response == False:
-                response = self.client.requestPut(inputs)
+                response = self.client.requestPut(*inputs)
             end_time = time.time()
             elapsed_time = start_time - end_time
             put_latencies.append(elapsed_time)
@@ -65,7 +67,7 @@ class PerformanceTests:
 
 
 if __name__ == "__main__":
-    client = Client()
+    client = ClientPerf()
 
     parser = argparse.ArgumentParser(
                     prog='Performance tests',

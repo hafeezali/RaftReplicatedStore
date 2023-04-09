@@ -151,7 +151,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                        
 
                 #    correcting the log entry
-                while prev_log_index <= log_index_to_commit - 1:
+                while prev_log_index < log_index_to_commit - 1:
                     # self.logger.debug(f'Stuck here')
                     # if it recieves an append entry response with higher term, it will revert to follower and break 
                     # out of the loop.
