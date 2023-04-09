@@ -84,7 +84,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
             self.__log.commit(log_index_to_commit)
 
-            while self.__log.is_applied(log_index_to_commit) :
+            while not self.__log.is_applied(log_index_to_commit) :
                 time.sleep(100/1000)
                 # self.logger.info("Waiting for log to commit entry for key: " + str(entry.key))
 
