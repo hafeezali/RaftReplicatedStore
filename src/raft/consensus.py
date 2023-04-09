@@ -84,7 +84,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
             self.__log.commit(log_index_to_commit)
 
-            while self.__log.is_applied(log_index_to_commit) :
+            while not self.__log.is_applied(log_index_to_commit) :
                 time.sleep(100/1000)
                 # self.logger.info("Waiting for log to commit entry for key: " + str(entry.key))
 
@@ -102,10 +102,9 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         if prev_log_index != -1:
             prev_term = self.__log.get(prev_log_index)['term']
         
-        term = self.__log.get_term()
+        current_term = self.__log.get_term()
         lastCommitIndex = self.__log.get_last_commit_index()
-        
-        self.logger.debug(f'Trying to create the request object term - {term}, prev_term - {prev_term}, lastcommitidx - {lastCommitIndex}')
+        self.logger.debug(f'Trying to create the request object for prev_term - {prev_term}, lastcommitidx - {lastCommitIndex}')
         log_entry = self.__log.get(prev_log_index + 1)
         raft_entry = raftdb.LogEntry.Entry(
             key = log_entry['key'],
@@ -114,12 +113,13 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
             sequence_number = log_entry['sequence_number'])
 
         request = raftdb.LogEntry(
-            term = term, 
+            term = log_entry['term'], 
             logIndex = prev_log_index + 1,
             entry = raft_entry,
 	        prev_term = prev_term,
             prev_log_index = prev_log_index,
-            lastCommitIndex = lastCommitIndex)
+            lastCommitIndex = lastCommitIndex,
+            current_term = current_term)
 
         return request         
     
@@ -172,7 +172,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                 # only adding to majority if the node has correctly appended it's log
                 if response.code == config.RESPONSE_CODE_OK : 
                     key = (entry.clientid, entry.sequence_number)
-                    majority = (len(self.__peers))/2 + 1
+                    majority = (len(self.__peers))/2
                     with self.lock :
                         self.logger.debug('Log appended for key: ' + str(entry.key) + 'adding to majority')
                         self.majority_counter[key] += 1
@@ -203,10 +203,10 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         # If previous term and log index for request matches the last entry in log, append
         # Else, return error. Leader will decrement next index for replica and retry
         entry = request.entry
-
+        self.logger.debug(f'Trying to append key: {entry} {request.prev_term} {request.prev_log_index} {request.term}')
         self.logger.debug('Trying to append key: ' + str(entry.key))
 
-        if request.term < self.__log.get_term() :
+        if request.current_term < self.__log.get_term() :
             self.logger.debug('Inside appendEntry handler, my term is greater than the server term')
             return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_REDIRECT, term = self.__log.get_term())
 

@@ -39,7 +39,7 @@ class HeartbeatResponse(_message.Message):
     def __init__(self, code: _Optional[int] = ..., term: _Optional[int] = ..., leaderId: _Optional[str] = ...) -> None: ...
 
 class LogEntry(_message.Message):
-    __slots__ = ["entry", "lastCommitIndex", "logIndex", "prev_log_index", "prev_term", "term"]
+    __slots__ = ["current_term", "entry", "lastCommitIndex", "logIndex", "prev_log_index", "prev_term", "term"]
     class Entry(_message.Message):
         __slots__ = ["clientid", "key", "sequence_number", "value"]
         CLIENTID_FIELD_NUMBER: _ClassVar[int]
@@ -51,19 +51,21 @@ class LogEntry(_message.Message):
         sequence_number: int
         value: int
         def __init__(self, key: _Optional[int] = ..., value: _Optional[int] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ...) -> None: ...
+    CURRENT_TERM_FIELD_NUMBER: _ClassVar[int]
     ENTRY_FIELD_NUMBER: _ClassVar[int]
     LASTCOMMITINDEX_FIELD_NUMBER: _ClassVar[int]
     LOGINDEX_FIELD_NUMBER: _ClassVar[int]
     PREV_LOG_INDEX_FIELD_NUMBER: _ClassVar[int]
     PREV_TERM_FIELD_NUMBER: _ClassVar[int]
     TERM_FIELD_NUMBER: _ClassVar[int]
+    current_term: int
     entry: LogEntry.Entry
     lastCommitIndex: int
     logIndex: int
     prev_log_index: int
     prev_term: int
     term: int
-    def __init__(self, term: _Optional[int] = ..., logIndex: _Optional[int] = ..., prev_term: _Optional[int] = ..., prev_log_index: _Optional[int] = ..., lastCommitIndex: _Optional[int] = ..., entry: _Optional[_Union[LogEntry.Entry, _Mapping]] = ...) -> None: ...
+    def __init__(self, term: _Optional[int] = ..., logIndex: _Optional[int] = ..., prev_term: _Optional[int] = ..., prev_log_index: _Optional[int] = ..., lastCommitIndex: _Optional[int] = ..., entry: _Optional[_Union[LogEntry.Entry, _Mapping]] = ..., current_term: _Optional[int] = ...) -> None: ...
 
 class LogEntryResponse(_message.Message):
     __slots__ = ["code", "term"]
