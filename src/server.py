@@ -17,7 +17,7 @@ TODO:
 2. What happens when we dont get majority when trying a put? We need to retry
 3. There might be some inconsistency at the db level here - Puts are happening from log, whereas gets are happening here. Do SELECT and INSERT/UPDATE overlap in sqlite3? 
     Hopefully latching is implemented for in-mem dict by default...
-4. When does the __init__ here finish execution?
+4. If get response is None, we need to set an appropriate error code and respond to client
 '''
 class Server(raftdb_grpc.ClientServicer):
 
