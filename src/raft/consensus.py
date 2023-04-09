@@ -136,37 +136,38 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                 response = stub.AppendEntries(request)
                 self.logger.debug(f'Recieved response {response.code}')
                     # the case where it doesn't match with the log
-                while response.code != config.RESPONSE_CODE_OK :
-                    # if it recieves an append entry response with higher term, it will revert to follower and break 
-                    # out of the loop.
-                    if response.code == config.RESPONSE_CODE_REDIRECT:
-                        self.logger.debug('There is a server with larger term, updating term and status')
-                        self.__log.update_term(response.term)
-                        self.__log.update_status(config.STATE['FOLLOWER'])
-                        break
-                    self.logger.debug('The entry is not matching the corresponding entry in the follower log')
-                    prev_log_index = prev_log_index - 1
-                    request = self.create_log_entry_request(prev_log_index)
-                    response = stub.AppendEntries(request)
-                       
-
-                #    correcting the log entry
-                while prev_log_index < log_index_to_commit - 1:
-                    # self.logger.debug(f'Stuck here')
-                    # if it recieves an append entry response with higher term, it will revert to follower and break 
-                    # out of the loop.
-                    if response.code == config.RESPONSE_CODE_REDIRECT:
-                        self.logger.debug('There is a server with larger term, updating term and status')
-                        self.__log.update_term(response.term)
-                        self.__log.update_status(config.STATE['FOLLOWER'])
-                        break
-                        
-                    if response.code == config.RESPONSE_CODE_OK :
-                        # self.logger.debug('here')
-                        self.logger.debug('Inserting correct entry in the server log')
-                        prev_log_index = prev_log_index + 1
+                if response.code != config.RESPONSE_CODE_OK:
+                    while response.code != config.RESPONSE_CODE_OK :
+                        # if it recieves an append entry response with higher term, it will revert to follower and break 
+                        # out of the loop.
+                        if response.code == config.RESPONSE_CODE_REDIRECT:
+                            self.logger.debug('There is a server with larger term, updating term and status')
+                            self.__log.update_term(response.term)
+                            self.__log.update_status(config.STATE['FOLLOWER'])
+                            break
+                        self.logger.debug('The entry is not matching the corresponding entry in the follower log')
+                        prev_log_index = prev_log_index - 1
                         request = self.create_log_entry_request(prev_log_index)
-                        response = stub.AppendEntries(request)    
+                        response = stub.AppendEntries(request)
+                           
+
+                    #    correcting the log entry
+                    while prev_log_index <= log_index_to_commit - 1:
+                        # self.logger.debug(f'Stuck here')
+                        # if it recieves an append entry response with higher term, it will revert to follower and break 
+                        # out of the loop.
+                        if response.code == config.RESPONSE_CODE_REDIRECT:
+                            self.logger.debug('There is a server with larger term, updating term and status')
+                            self.__log.update_term(response.term)
+                            self.__log.update_status(config.STATE['FOLLOWER'])
+                            break
+                            
+                        if response.code == config.RESPONSE_CODE_OK :
+                            # self.logger.debug('here')
+                            self.logger.debug('Inserting correct entry in the server log')
+                            prev_log_index = prev_log_index + 1
+                            request = self.create_log_entry_request(prev_log_index)
+                            response = stub.AppendEntries(request)    
                 
                 # only adding to majority if the node has correctly appended it's log
                 if response.code == config.RESPONSE_CODE_OK : 

@@ -32,7 +32,6 @@ TODO:
 3. Shelve is having some weird behavior when appending the first element to the list - investigate this later (fixed by using a dict instead of list for log)
 4. We probably want the locks to become more finer for some performance gains
 5. Can ignore committed logs from disk on recover. Can remove committed logs from log dict
-6. Can implement persistence of in-memory store
 '''
 
 class Log:
@@ -233,9 +232,9 @@ class Log:
 			return self.last_commit_idx
 
 	def get_term(self):
-		self.logger.info("Get term")
+		# self.logger.info("Get term")
 		with self.lock:
-			self.logger.info("Got the lock for term")
+			# self.logger.info("Got the lock for term")
 			return self.term
 
 	def update_term(self, term):
@@ -357,7 +356,7 @@ class Log:
 		self.logger.info("Update status done")
 
 	def get_status(self):
-		self.logger.info("Get status")
+		# self.logger.info("Get status")
 
 		return self.status
 	

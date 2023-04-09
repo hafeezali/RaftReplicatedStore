@@ -12,7 +12,7 @@ from logs.log import Log
 '''
 TODO:
 1. [Done] Still possible that update votes can be called by two concurrent threads when node just became leader by one of the threads. Just adding a status check should fix the issue
-2. [Unable to reproduce] There was some type case issue in RequestVote around candidate_term and voter_term
+2. [Unable to reproduce] There was some type casting issue in RequestVote around candidate_term and voter_term
 3. [Done] If candidate term > voter term, check logs before sending vote
 4. [Done] If we send a vote, set leader id to None since we are updating our term, will find out leader through heartbeat
 '''
