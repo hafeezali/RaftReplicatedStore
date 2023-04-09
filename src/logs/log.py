@@ -232,9 +232,9 @@ class Log:
 			return self.last_commit_idx
 
 	def get_term(self):
-		self.logger.info("Get term")
+		# self.logger.info("Get term")
 		with self.lock:
-			self.logger.info("Got the lock for term")
+			# self.logger.info("Got the lock for term")
 			return self.term
 
 	def update_term(self, term):
@@ -356,7 +356,7 @@ class Log:
 		self.logger.info("Update status done")
 
 	def get_status(self):
-		self.logger.info("Get status")
+		# self.logger.info("Get status")
 
 		return self.status
 	

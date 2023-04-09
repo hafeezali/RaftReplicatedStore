@@ -63,7 +63,7 @@ was talking to is no longer the leader. So the client should retry the request w
 
 To start:
 
-docker build -t kvstore -f Dockerfile .    
+docker build -t kvstore -f Dockerfile .
 docker compose -f docker-compose.yaml up -d
 
 To stop:
