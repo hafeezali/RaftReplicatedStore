@@ -109,8 +109,8 @@ class Client:
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                     print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
                 else:
-                    print(f'Some other error, details: {status_code} {e.details()}')	
-                    leader_id = self.get_next_server(self.leader_id)
+                    print(f'Connection to {self.leader_id} failed. Trying the next server, details: {status_code} {e.details()}')
+                    self.leader_id = self.get_next_server(self.leader_id)
                     self.redirectToLeaderPut(self.leader_id, key, value, clientid, sequence_number)
 
 if __name__ == '__main__':
