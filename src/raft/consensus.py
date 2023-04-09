@@ -72,7 +72,7 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         
         
         while self.ready_to_commit[key]!= 1 and self.__log.get_status() == config.STATE['LEADER']:
-            time.sleep(100/1000)
+            time.sleep(config.SERVER_SLEEP_TIME)
             # self.logger.debug("Waiting for responses from followers for key: " + str(entry.key) + ", value: " + str(entry.value)) 
 
         
@@ -84,8 +84,8 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
             self.__log.commit(log_index_to_commit)
 
-            while self.__log.is_applied(log_index_to_commit) :
-                time.sleep(100/1000)
+            while not self.__log.is_applied(log_index_to_commit) :
+                time.sleep(config.SERVER_SLEEP_TIME)
                 # self.logger.info("Waiting for log to commit entry for key: " + str(entry.key))
 
             return 'OK'

@@ -9,6 +9,7 @@ import time
 import shelve
 
 from raft.config import STATE
+from raft.config import SERVER_SLEEP_TIME
 
 '''
 Log layer responsible for
@@ -199,7 +200,7 @@ class Log:
 						self.config_change[key] = False
 
 			config_file.close()
-			time.sleep(100/1000)
+			time.sleep(SERVER_SLEEP_TIME)
 
 	'''
 	This will only be called by the leader node. This commits log entry at index. Entries can be committed out of order in leader
@@ -287,7 +288,7 @@ class Log:
 					else:
 						break
 					idx = idx + 1
-			time.sleep(100/1000)
+			time.sleep(SERVER_SLEEP_TIME)
 
 	def get(self, index):
 		self.logger.info("Get at index: " + str(index))

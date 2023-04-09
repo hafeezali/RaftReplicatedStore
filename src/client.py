@@ -72,8 +72,8 @@ class Client:
                     print(f"Client request for Get key: {key} timed out, details: {status_code} {e.details()}\n")
                 else:
                     print(f'Connection to {leader_id} failed. Trying the next server, details: {status_code} {e.details()}')
-                    leader_id = get_next_server(leader_id)
-                    redirectToLeaderGet(leader_id, key)
+                    leader_id = self.get_next_server(leader_id)
+                    self.redirectToLeaderGet(leader_id, key)
 
     def requestPut(self, key, value, clientid, sequence_number):
         with grpc.insecure_channel(self.server_addr) as channel:
@@ -109,8 +109,8 @@ class Client:
                     print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
                 else:
                     print(f'Some other error, details: {status_code} {e.details()}')	
-                    leader_id = get_next_server(leader_id)
-                    redirectToLeaderPut(leader_id, key, value, clientid, sequence_number)
+                    leader_id = self.get_next_server(leader_id)
+                    self.redirectToLeaderPut(leader_id, key, value, clientid, sequence_number)
 
 if __name__ == '__main__':
     client = Client()
