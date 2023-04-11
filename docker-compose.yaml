@@ -7,7 +7,7 @@ services:
     environment:
       - TYPE='memory'
       - SERVERID='server-1'
-      - PEERS=server-2:50052,server-3:50052,server-4:50052,server-5:50052
+      - PEERS=server-2:50052,server-3:50052
 
   server-2:
     image : kvstore
@@ -17,7 +17,7 @@ services:
     environment:
       - TYPE='memory'
       - SERVERID='server-2'
-      - PEERS=server-1:50052,server-3:50052,server-4:50052,server-5:50052
+      - PEERS=server-1:50052,server-3:50052
 
   server-3:
     image : kvstore
@@ -27,4 +27,4 @@ services:
     environment:
       - TYPE='memory'
       - SERVERID='server-3'
-      - PEERS=server-1:50052,server-2:50052,server-4:50052,server-5:50052
+      - PEERS=server-1:50052,server-2:50052
