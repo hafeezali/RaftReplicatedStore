@@ -53,6 +53,7 @@ class Client:
             try:
                 response = stub.Get(request, timeout=config.RPC_TIMEOUT)
                 self.leader_id = response.leaderId.replace("'", "")
+                print(self.leader_id)
                 while response.code == config.RESPONSE_CODE_REDIRECT and (self.leader_id == None or self.leader_id == '' or self.leader_id == 'No leader') :
                     print('Waiting for election to happen')
                     time.sleep(config.CLIENT_SLEEP_TIME)

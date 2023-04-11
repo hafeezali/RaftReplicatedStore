@@ -19,6 +19,8 @@ add_lock = Lock()
 
 total_put_time = 0
 totatl_get_time = 0
+num_requests = 0
+get_latencies = []
 
 class PerformanceTests:
 
@@ -103,6 +105,22 @@ class PerformanceTests:
             global get_latency
             get_latency += avg_get_latency
 
+    def get_same_key(self):
+        global num_requests
+        global get_latencies
+
+        for i in range(50000000):
+            response = (False, -1)
+            start_time = time.time()
+            while response[0] == False:
+                response = self.client.requestGet(1)
+                num_requests += 1
+            end_time = time.time()
+            if response[1] != 1:
+                print(f"!!!!!!!!!! GET returned a weird value, expected: 1, actual {response[1]}")
+            elapsed_time = end_time - start_time
+            get_latencies.append(elapsed_time)
+
 def start_clients(num_clients, id, key, start_seq_num):
     starting_seq_num = start_seq_num
     start_client_id = id
@@ -127,10 +145,38 @@ def start_clients(num_clients, id, key, start_seq_num):
         t.join()
 
     total_num_requests = num_clients * 100 * 10
+    print(f"Number of Clients: {num_clients}")
+    print(f"Total number of requests: {total_num_requests}")
     print(f"PUT Throughput: {total_num_requests/total_put_time}")
     print(f"GET Throughput: {total_num_requests/totatl_get_time}")
     print(f"The put latency average over all threads: {put_latency/num_clients} ")
     print(f"The put latency average over all threads: {get_latency/num_clients} ")
+
+def print_observed_tp():
+    global get_latencies
+    global num_requests
+    t = time.time()
+    t2 = t + 300
+
+    while t2 - time.time() > 0:
+        total_time_gets = sum(get_latencies)
+        if num_requests > 0:
+            print(f"num_requests {num_requests} observed tp: {total_time_gets / num_requests}")
+        time.sleep(1)
+
+def leader_failure(client_id, key_start, starting_seq_num):
+    client = ClientPerf()
+    client.set_sequence_number(starting_seq_num)
+    tester = PerformanceTests(client, client_id, key_start)
+
+    t1 = Thread(target=tester.get_same_key)
+    t2 = Thread(target=print_observed_tp)
+    t1.start()
+    t2.start()
+
+    t2.join()
+    t1.join()
+
 
 if __name__ == "__main__":
     
@@ -153,6 +199,7 @@ if __name__ == "__main__":
     # print(f"Client ID: {client_id}, Starting Sequence Number: {starting_seq_num}")
 
     start_clients(num_clients, client_id, key_start, starting_seq_num)
+    # leader_failure(client_id, key_start, starting_seq_num)
     
 
         
