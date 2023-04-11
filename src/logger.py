@@ -5,6 +5,7 @@ import os
 class Logging:
     def __init__(self, server_id):
         self.log_level = logging.DEBUG
+        # self.log_level = logging.CRITICAL
         # Logger name is set to server id
         server_id = server_id.replace("'", "")
         self.logger = logging.getLogger(server_id)
@@ -18,7 +19,7 @@ class Logging:
     def get_logger(self):
         logging.basicConfig(filename=self.log_file_name, 
                             level=self.log_level,
-                            format='%(asctime)s : %(name)s : {%(pathname)s:%(funcName)s:%(lineno)d} : %(message)s', 
+                            format='%(asctime)s : %(name)s : {%(pathname)s:%(funcName)s:%(lineno)d} : %(threadName)s : %(message)s', 
                             datefmt='%d-%b-%y %H:%M:%S',
                             filemode='w')
 

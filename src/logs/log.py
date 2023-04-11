@@ -173,12 +173,12 @@ class Log:
 
 	def debug_check_log_file(self, log_file):
 		if not log_file:
-		    print("Error: Failed to create log file")
+			print("Error: Failed to create log file")
 		else:
-		    # Inspect the contents of the file
-		    print("Log file contents:")
-		    for key, value in log_file.items():
-		        print(f"{key}: {value}")
+			# Inspect the contents of the file
+			print("Log file contents:")
+			for key, value in log_file.items():
+				print(f"{key}: {value}")
 
 	'''
 	Flush entry at index to disk

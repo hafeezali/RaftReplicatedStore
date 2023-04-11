@@ -27,5 +27,4 @@ services:
     environment:
       - TYPE='memory'
       - SERVERID='server-3'
-      - PEERS=server-1:50052,server-2:50052   
-      
+      - PEERS=server-1:50052,server-2:50052
