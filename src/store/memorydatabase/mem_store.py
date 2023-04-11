@@ -55,5 +55,6 @@ class MemoryStore:
 
 	def put(self, key, value):
 		self.logger.info("Updating key: " + str(key) + ", value: " + str(value))
-		self.db.update({key: value})
-		self.flush(key, value)
+		for (k, v) in zip(key, value):
+			self.db.update({k: v})
+			self.flush(k, v)

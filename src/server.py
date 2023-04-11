@@ -39,9 +39,13 @@ class Server(raftdb_grpc.ClientServicer):
         # Strongly consistent -- if we allow only one outstanding client request, the system must be strongly consistent by default
         self.logger.info("Get request received for key: " + str(request.key))
         leader_id = self.log.get_leader()
-
         if leader_id == self.server_id:
-            return raftdb.GetResponse(code = config.RESPONSE_CODE_OK, value = self.store.get(request.key), leaderId = leader_id)
+            values = list()
+            for k in request.key:
+                v = self.store.get(k)
+                if v is not None:
+                    values.append(v)
+            return raftdb.GetResponse(code = config.RESPONSE_CODE_OK, value = values, leaderId = leader_id)
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
             return raftdb.GetResponse(code = config.RESPONSE_CODE_REDIRECT, value = None, leaderId = leader_id)
