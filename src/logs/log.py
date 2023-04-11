@@ -173,12 +173,12 @@ class Log:
 
 	def debug_check_log_file(self, log_file):
 		if not log_file:
-		    print("Error: Failed to create log file")
+			print("Error: Failed to create log file")
 		else:
-		    # Inspect the contents of the file
-		    print("Log file contents:")
-		    for key, value in log_file.items():
-		        print(f"{key}: {value}")
+			# Inspect the contents of the file
+			print("Log file contents:")
+			for key, value in log_file.items():
+				print(f"{key}: {value}")
 
 	'''
 	Flush entry at index to disk
@@ -227,7 +227,7 @@ class Log:
 		with self.lock:
 			self.log[index]['commit_done'] = True
 			self.logger.info("Start commit index: " + str(self.last_commit_idx))
-			while self.last_commit_idx + 1 <= index:
+			while self.last_commit_idx + 1 <= self.log_idx and self.log[self.last_commit_idx+1]['commit_done'] is True:
 				self.last_commit_idx += 1
 			self.logger.info("End commit index: " + str(self.last_commit_idx))
 			self.config_change['last_commit_idx'] = True
