@@ -1,0 +1,30 @@
+services:
+  server-1:
+    image : kvstore
+    ports:
+      - "127.0.0.1:50051:50051"
+      - "127.0.0.1:50052:50052" 
+    environment:
+      - TYPE='memory'
+      - SERVERID='server-1'
+      - PEERS=server-2:50052,server-3:50052
+
+  server-2:
+    image : kvstore
+    ports:
+      - "127.0.0.1:50053:50051"
+      - "127.0.0.1:50054:50052"     
+    environment:
+      - TYPE='memory'
+      - SERVERID='server-2'
+      - PEERS=server-1:50052,server-3:50052
+
+  server-3:
+    image : kvstore
+    ports:
+      - "127.0.0.1:50055:50051"
+      - "127.0.0.1:50056:50052"     
+    environment:
+      - TYPE='memory'
+      - SERVERID='server-3'
+      - PEERS=server-1:50052,server-2:50052

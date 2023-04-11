@@ -5,34 +5,54 @@ service Client {
 	rpc Put (PutRequest) returns (PutResponse) {}
 }
 
-service Raft {
-	rpc AppendEntries (LogEntry) returns (LogEntryResponse) {}
+service RaftElectionService {
+	rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
 	rpc RequestVote (VoteRequest) returns (VoteResponse) {}
 }
 
+service Consensus {
+	rpc AppendEntries (LogEntry) returns (LogEntryResponse) {}
+}
+
 message GetRequest {
-	int32 key = 1;
+	repeated int32 key = 1;
 }
 
 message PutRequest {
-	int32 key = 1;
-	int32 value = 2;
+	repeated int32 key = 1;
+	repeated int32 value = 2;
+	int32 clientid = 3;
+	int32 sequence_number = 4;
 }
 
 message GetResponse {
 	int32 code = 1;
-	int32 value = 2;
+	repeated int32 value = 2;
+	string leaderId = 3;
 }
 
 message PutResponse {
 	int32 code = 1;
+	string leaderId = 2;
+}
+
+message HeartbeatRequest {
+	int32 term = 1;
+	string serverId = 2;
+}
+
+message HeartbeatResponse {
+	int32 code = 1;
+	int32 term = 2;
+	string leaderId = 3;
 }
 
 message LogEntry {
-
 	message Entry {
-		int32 key = 1;
-		int32 value = 2;
+		repeated int32 key = 1;
+		repeated int32 value = 2;
+		int32 clientid = 3;
+		int32 sequence_number = 4;
 	}
 
 	int32 term = 1;
@@ -41,6 +61,7 @@ message LogEntry {
 	int32 prev_log_index = 4;
 	int32 lastCommitIndex = 5;
 	Entry entry = 6;
+	int32 current_term = 7;
 }
 
 message LogEntryResponse {
@@ -50,11 +71,13 @@ message LogEntryResponse {
 
 message VoteRequest {
 	int32 term = 1;
-	int32 logIndex = 2;
+	int32 lastLogTerm = 2;
+	int32 lastLogIndex = 3;
+	string candidateId = 4;
 }
 
 message VoteResponse {
 	bool success = 1;
 	int32 term = 2;
-	int32 logIndex = 3;
+	string leaderId = 3;
 }

@@ -4,13 +4,13 @@ import protos.raftdb_pb2_grpc as raftdb_grpc
 import raft.config as config
 import time
 
-peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:50053', 'server-3': 'localhost:50055'}
+peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:50053', 'server-3': 'localhost:50055',
+                       'server-4': 'localhost:50057', 'server-5': 'localhost:50059'}
 
 '''
 TODO:
-1. Fine tune CLIENT_SLEEP_TIME 
 '''
-class Client:
+class ClientPerf:
 
     def __init__(self):
         self.server_addr = 'localhost:50051'
@@ -32,11 +32,11 @@ class Client:
         self.leader_id = leader_id
         return self.requestGet(key)
         
-    def redirectToLeaderPut(self, leader_id, key, value, clientid, sequence_number):
+    def redirectToLeaderPut(self, leader_id, key,value, clientid):
         print("Redirecting to leader with id: " + leader_id)
         self.server_addr = peer_list_mappings[leader_id]
         self.leader_id = leader_id
-        return self.requestPut(key, value, clientid, sequence_number)
+        return self.requestPut(key, value, clientid)    
 
     def get_next_server(self, leader_id):
         id_ = int(leader_id[-1]) + 1
@@ -53,7 +53,7 @@ class Client:
             try:
                 response = stub.Get(request, timeout=config.RPC_TIMEOUT)
                 self.leader_id = response.leaderId.replace("'", "")
-                print(self.leader_id)
+                # print(self.leader_id)
                 while response.code == config.RESPONSE_CODE_REDIRECT and (self.leader_id == None or self.leader_id == '' or self.leader_id == 'No leader') :
                     print('Waiting for election to happen')
                     time.sleep(config.CLIENT_SLEEP_TIME)
@@ -62,12 +62,15 @@ class Client:
                     
                 if response.code == config.RESPONSE_CODE_REDIRECT :
                     response = self.redirectToLeaderGet(response.leaderId.replace("'", ""), key)
-
+                    return response
+                    
                 elif response.code == config.RESPONSE_CODE_OK:
-                    print(f"GET for key: {key} Succeeded, value: {response.value}\n")
+                    # print(f"GET for key: {key} Succeeded, value: {response.value}\n")
+                    return True, response.value
                 
                 else:
                     print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
+                    return False, -1
 
             except grpc.RpcError as e:
                 status_code = e.code()
@@ -76,9 +79,11 @@ class Client:
                 else:
                     print(f'Connection to {self.leader_id} failed. Trying the next server, details: {status_code} {e.details()}')
                     self.leader_id = self.get_next_server(self.leader_id)
-                    self.redirectToLeaderGet(self.leader_id, key)
+                    return self.redirectToLeaderGet(self.leader_id, key)
 
-    def requestPut(self, key, value, clientid, sequence_number):
+    def requestPut(self, key, value, clientid):
+        sequence_number = self.get_sequence_number()
+        # print(f"Client id {clientid}, seq number: {sequence_number}")
         with grpc.insecure_channel(self.server_addr) as channel:
             stub = raftdb_grpc.ClientStub(channel)
             request = raftdb.PutRequest(key=key, value=value, clientid = clientid, sequence_number = sequence_number)
@@ -87,6 +92,7 @@ class Client:
                 response = stub.Put(request, timeout=config.RPC_TIMEOUT)
 
                 self.leader_id = response.leaderId.replace("'", "")
+                # print(leader_id)
                 while response.code == config.RESPONSE_CODE_REDIRECT and (self.leader_id == None or self.leader_id == '' or self.leader_id == 'No leader') :
                     print('Waiting for election to happen')
                     time.sleep(config.CLIENT_SLEEP_TIME)
@@ -94,17 +100,24 @@ class Client:
                     self.leader_id = response.leaderId.replace("'", "")
 
                 if response.code == config.RESPONSE_CODE_REDIRECT :
-                    response = self.redirectToLeaderPut(response.leaderId.replace("'", ""), key, value, clientid, sequence_number)
-                
+                    response = self.redirectToLeaderPut(response.leaderId.replace("'", ""), key, value, clientid)
+                    self.increment_sequence_number()
+                    return response
                 elif response.code == config.RESPONSE_CODE_OK:
-                    print(f"Put of key: {key}, value: {value} succeeded!\n")
+                    # print(f"Put of key: {key}, value: {value} succeeded!\n")
+                    self.increment_sequence_number()
+                    return True
 
                 elif response.code == config.RESPONSE_CODE_REJECT:
                     print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
-						
+                    self.increment_sequence_number()
+                    return False
+                        
                 else:
                     print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
-						
+                    self.increment_sequence_number()
+                    return False
+                
             except grpc.RpcError as e:
                 status_code = e.code()
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
@@ -112,32 +125,27 @@ class Client:
                 else:
                     print(f'Connection to {self.leader_id} failed. Trying the next server, details: {status_code} {e.details()}')
                     self.leader_id = self.get_next_server(self.leader_id)
-                    self.redirectToLeaderPut(self.leader_id, key, value, clientid, sequence_number)
+                    self.increment_sequence_number() 
+                    return self.redirectToLeaderPut(self.leader_id, key, value, clientid)
+                
 
-if __name__ == '__main__':
-    client = Client()
-    starting_seq_num = int(input("Enter starting sequence number\n"))
-    client.set_sequence_number(starting_seq_num)
-
-    while True:
-        reqType = int(input("Options - Get: 1, Put: 2, Quit: 3\n"))
-        if reqType == 1:
-            keys = list(map(int, input("Enter key(s)\n").strip().split()))
-            client.requestGet(keys)
-        elif reqType == 2:
-            keys = list(map(int, input("Enter key(s)\n").strip().split()))
-            values = list(map(int, input("Enter values(s)\n").strip().split()))
-            clientId = int(input("\nEnter clientid \n"))
-            inputs = list()
-            inputs.append(keys)
-            inputs.append(values)
-            inputs.append(clientId)
-            inputs.append(client.get_sequence_number())
-            client.requestPut(*inputs)
-            client.increment_sequence_number()
-        elif reqType == 3:
-            print("SEEEE YAAA\n")
-            break
-        else:
-            print("Invalid input\n")
+# if __name__ == '__main__':
+    # print("Staring Interactive Client")
+    # client = ClientPerf()
+    # starting_seq_num = int(input("Enter Starting Sequence Number\n"))
+    # client.set_sequence_number(starting_seq_num)
+        
+    # while True:
+    #     reqType = int(input("Options - Get: 1, Put: 2, Quit: 3\n"))
+    #     if reqType == 1:
+    #         key = int(input("Enter key\n"))
+    #         client.requestGet(key)
+    #     elif reqType == 2:
+    #         inputs = list(map(int, input("\nEnter key, value, clientid [ex: 1 2 3]\n").strip().split()))[:3]
+    #         client.requestPut(*inputs)
+    #     elif reqType == 3:
+    #         print("SEEEE YAAA\n")
+    #         break
+    #     else:
+    #         print("Invalid input\n")
         

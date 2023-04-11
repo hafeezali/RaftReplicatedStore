@@ -2,38 +2,46 @@ import time
 from threading import Lock, Thread
 from queue import Queue
 import raft.config as config
-import concurrent.futures
+import concurrent.futures as futures
 import random
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
-from raft.store import Store
-from raft.consensus import Consensus
+from logs.log import Log
 
+'''
+TODO:
+1. [Done] Still possible that update votes can be called by two concurrent threads when node just became leader by one of the threads. Just adding a status check should fix the issue
+2. [Unable to reproduce] There was some type casting issue in RequestVote around candidate_term and voter_term
+3. [Done] If candidate term > voter term, check logs before sending vote
+4. [Done] If we send a vote, set leader id to None since we are updating our term, will find out leader through heartbeat
+'''
+class Election(raftdb_grpc.RaftElectionService):
 
-class Election:
-    def __init__(self, replicas: list, store: Store, queue: Queue):
+    def __init__(self, peers: list, log: Log, serverId: int, logger):
         self.timeout_thread = None
-        self.status = config.STATE.FOLLOWER
-        self.term = 0
         self.num_votes = 0
-        self.store = store
-        self.replicas = replicas
-        self.__lock = Lock()
-        self.q = queue
+        self.peers = peers
+        self.serverId = serverId
+        self.__log = log
+        self.logger = logger
+        self.last_heartbeat_time = 0
+        self.election_lock = Lock() # Adding for updating votes
+
+    def run_election_service(self):
+        self.logger.debug('Starting Election Timeout')
         self.election_timeout()
 
     def begin_election(self):
         '''
         Once the election timeout has passed, this function starts the leader election
         '''
-        # logger.info('starting election')
-        self.term += 1
-        self.num_votes = 0
-        self.status = config.STATE.CANDIDATE
-
-        # Calculate majority, TODO: update once transport layer is done
-        self.majority = ((1 + len(self.replicas)) // 2) + 1 
+        self.__log.set_self_candidate()
+        self.logger.debug(f'Starting a new election for term {self.__log.get_term()}')
+        self.reset_num_votes()
+        
+        # Calculate majority
+        self.majority = ((1 + len(self.peers)) // 2) + 1 
         
         # Wait for election timeout
         self.election_timeout()
@@ -41,61 +49,76 @@ class Election:
         # vote for ourself
         self.update_votes()
 
-        # request votes from all replicas
+        # request votes from all peers
         self.request_votes()
+
 
     def election_timeout(self):
         '''
         Wait for timeout before starting an election incase we get heartbeat from a leader
         '''
         try:
-            # logger.info('starting timeout')
-            self.reset_election_timeout()
+            self.logger.info('Waiting for Election timeout')
 
             if self.timeout_thread and self.timeout_thread.is_alive():
                 return
             
-            self.timeout_thread = Thread(target=self.replica_loop)
+            self.timeout_thread = Thread(target=self.follower_loop)
             self.timeout_thread.start()
 
         except Exception as e:
             raise e
         
-    def random_timeout():
+
+    def random_timeout(self):
         '''
         return random timeout number
         '''
         return random.randrange(config.MIN_TIMEOUT, config.MAX_TIMEOUT) / 1000
     
+
     def reset_election_timeout(self):
         '''
         If we get a heartbeat from the leader, reset election timeout
         '''
-        self.election_time = time.time() + self.random_timeout()
+        self.logger.debug('Resetting Election Timeout')
+        self.election_timeout_time = self.random_timeout()
+        self.election_time = time.time() + self.election_timeout_time
+        self.logger.info('New election timeout time: ' + str(self.election_timeout_time))
 
-    def replica_loop(self):
+    def follower_loop(self):
         '''
         Followers execute this loop, and wait for heartbeats from leader
         '''
-        while self.status != config.STATE.LEADER:
-            wait_time = self.election_time - time.time()
-            if wait_time < 0:
-                if self.replicas:
+        self.logger.info('Starting follower loop')
+        while self.__log.get_status() != config.STATE['LEADER']:
+            self.reset_election_timeout()
+            time_since_last_heartbeat = time.time() - self.last_heartbeat_time
+            self.logger.info('Time since last heartbeat: ' + str(time_since_last_heartbeat))
+            if time_since_last_heartbeat > self.election_timeout_time:
+                if self.peers:
                     self.begin_election()
-            else:
-                time.sleep(wait_time)
+            wait_time = self.election_time - time.time()
+            time.sleep(wait_time)
+
+    def get_num_votes(self):
+        with self.election_lock:
+            return self.num_votes
         
+    def increment_num_votes(self):
+        with self.election_lock:
+            self.num_votes += 1
+
+    def reset_num_votes(self):
+        with self.election_lock:
+            self.num_votes = 0
+
     def update_votes(self):
-        self.num_votes += 1
-        if self.num_votes >= self.majority:
-            with self.__lock:
-                self.status = config.STATE.LEADER
-                if self.q.empty():
-                    self.q.put({'election': self})
-                else:
-                    election = self.q.get()
-                    election.update({'election': self})
-                    self.q.put(election)
+        self.logger.info("Updating number of votes")
+        self.increment_num_votes()
+        if self.get_num_votes() >= self.majority and self.__log.get_status() == config.STATE['CANDIDATE']:
+            self.logger.info(f'Received majority of votes for term {self.__log.get_term()}')
+            self.__log.set_self_leader()
             self.elected_leader()
 
     def elected_leader(self):
@@ -103,82 +126,240 @@ class Election:
         If this node is elected as the leader, start sending
         heartbeats to the follower nodes
         '''
-        for replica in self.replicas:
-            Thread(target=self.sendHeartbeat, args=(replica,)).start()
+        self.logger.info(f'Elected leader!!! for term {self.__log.get_term()}')
+        for peer in self.peers:
+            Thread(target=self.sendHeartbeat, args=(peer,)).start()
 
-        
     def sendHeartbeat(self, follower):
-        # To send heartbeats
-        with grpc.insecure_channel(follower) as channel:
-            stub = raftdb_grpc.RaftStub(channel)
-            term_index = self.__store.logIndex
-            request = raftdb.LogEntry(
-                        term=self.term, 
-                        logIndex=term_index,
-                        Entry=None,lastCommitIndex=self.__store.lastCommitIndex, 
-                        commit = 0)
+        term = self.__log.get_term()
+        self.logger.info(f'Sending heartbeat for term {term} to {follower}')
+        with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
+            stub = raftdb_grpc.RaftElectionServiceStub(channel)
+            request = raftdb.HeartbeatRequest(
+                term = term,
+                serverId = self.serverId
+            )
             start = time.time()
-            response = stub.AppendEntries(request)
-            while response.code != 200:
-                # Need heartbeat response from append entries, added term proto to be sent back
-                response = stub.AppendEntries(request)
+            
+            while self.__log.get_term() == term and self.__log.get_status() == config.STATE['LEADER']:
+                try:
+                    response = stub.Heartbeat(request, timeout=config.RPC_TIMEOUT)
+
+                    if response.code != config.RESPONSE_CODE_OK:
+                        if response.term > self.__log.get_term():
+                            # We are not the most up to date term, revert to follower
+                            # Our heartbeat was rejected, so update leader ID to current leader
+                            self.logger.info(f'Stepping down from leader for {term}, new term: {response.term}')
+                            self.__log.revert_to_follower(response.term, response.leaderId)
+                            break
+                    else:
+                        # We got an OK response, sleep for sometime and then send heartbeat again
+                        wait_time = time.time() - start
+                        if config.HB_TIME > wait_time:
+                            time.sleep((config.HB_TIME - wait_time) / 1000)
+
+                except grpc.RpcError as e:
+                    status_code = e.code()
+                  
+                    if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                        # timeout, will retry if we are still leader
+                        self.logger.debug(f'Heartbeat failed with timeout error, peer: {follower}, {status_code} details: {e.details()}')
+                    else :
+                        # Network partition can cause this. We need to sleep to avoid sending too many of these errrors
+                        time.sleep(config.HB_TIME / 2000)
+                        self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
+
+    def Heartbeat(self, request, context):
+        '''
+        Check the term of the sender. If sender term is greater than ours,
+        if we are candidate or leader, immediately set our state to follower
+
+        If our term is less or equal (and we are not the leader), return 200
+        Else return 500, along with our term so leader will know there is a
+        higher term in the system.
+
+        '''
+        follower_term = self.__log.get_term()
+
+        sender_term, sender_serverId = request.term, request.serverId
+        self.logger.info(f'Received heartbeat from leader for term: {sender_term} from leader: {sender_serverId}')
         
-            wait_time = time.time() - start
-            time.sleep((config.HB_TIME - wait_time) / 1000)
-        
+        if follower_term <= sender_term:
+            # Update our term to match sender term
+            # Update leader ID so that we can redirect requests to the leader
+
+            # If this server was leader or candidate it will set to follower
+            self.logger.info(f'Accepted heartbeat for term: {sender_term}')
+            self.__log.revert_to_follower(sender_term, sender_serverId)
+            # update last time we received heartbeat
+            self.last_heartbeat_time = time.time()
+            return raftdb.HeartbeatResponse(code = config.RESPONSE_CODE_OK,
+                                            term = sender_term,
+                                            leaderId= self.__log.get_leader())
+        else:
+            # return the leader ID we have to the peer sending heartbeat, so it can 
+            # update its own leader id since it will revert to follower.
+            self.logger.info(f'Rejected heartbeat for term: {sender_term}, current term: {follower_term}')
+            return raftdb.HeartbeatResponse(code = config.RESPONSE_CODE_REJECT,
+                                            term = follower_term,
+                                            leaderId= self.__log.get_leader())
+
     def request_votes(self):
         # Request votes from other nodes in the cluster.
-        
-        for replica in self.replicas:
-            Thread(target=self.send_vote_request, args=(replica, self.term)).start()
+        term = self.__log.get_term()
+        self.logger.info(f'Requesting votes for term: {term}')
+        for peer in self.peers:
+            Thread(target=self.send_vote_request, args=(peer, term)).start()
             
     def send_vote_request(self, voter: str, term: int):
   
-        candidate_last_index = self.__store.logIndex
+        # Assumption is this idx wont increase when sending heartbeats right?
+        candidate_last_log_index = self.__log.get_log_idx()
+        candidate_term = term
 
         # get term of last item in log
-        candidate_term = self.__store.log[candidate_last_index].term
-        request = raftdb.VoteRequest(term=candidate_term, logIndex=candidate_last_index)
+        # can just do log.term -- current term -- different from last log term
+        if candidate_last_log_index == -1 : 
+            candidate_last_log_term = 0
+        else:
+            candidate_last_log_term = self.__log.get(candidate_last_log_index)['term']
 
-        while self.status == config.STATE.CANDIDATE and self.term == term:
+        while self.__log.get_status() == config.STATE['CANDIDATE'] and self.__log.get_term() == candidate_term:
+            
+            self.logger.info(f'Requesting vote for term: {term} from {voter}')
+            with grpc.insecure_channel(voter, options=(('grpc.enable_http_proxy', 0),)) as channel:
+                self.logger.info(f'Channel for term {term} to {voter}')
 
-            with grpc.insecure_channel(voter) as channel:
-                stub = raftdb_grpc.RaftStub(channel)
-                vote_response = stub.RequestVote(request)
+                try: 
+                    stub = raftdb_grpc.RaftElectionServiceStub(channel)
+                    self.logger.info(f'Created stub for term {term} to {voter}, sending rpc')
+                    request = raftdb.VoteRequest(term = candidate_term, 
+                                     lastLogTerm = candidate_last_log_term,
+                                     lastLogIndex = candidate_last_log_index,
+                                     candidateId = self.serverId)
+                    vote_response = stub.RequestVote(request, timeout = config.RPC_TIMEOUT)
+
+                    self.logger.info(f'Vote Response for term {term} is {vote_response}')
+                    if vote_response:
+                        vote = vote_response.success
+                        if vote == True and self.__log.get_status() == config.STATE['CANDIDATE']:
+                            self.logger.info(f'Received vote for term: {term} from {voter}')
+                            self.update_votes()
+                        elif not vote:
+                            voter_term = vote_response.term
+                            if voter_term > self.__log.get_term():
+                                self.logger.info(f'Did not receive vote for term: {term} from {voter}, voter term: {voter_term}')
+                                self.__log.revert_to_follower(voter_term, vote_response.leaderId)
+                        break
+                    else:
+                        self.logger.info(f'No vote response for term: {term} from {voter}')
+
+                except grpc.RpcError as e:
+                    status_code = e.code()
+                  
+                    if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                        # timeout, will retry if we are still leader
+                        self.logger.debug(f'Request vote failed with timeout error, peer: {voter}, {status_code} details: {e.details()}')
+                    else :
+                        self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
+
+    def check_completeness_of_log(self, voter_last_log_term, voter_last_log_index,
+                                        candidate_last_log_term, candidate_last_log_index,
+                                        candidate_id, candidate_term):
+
+        # Check log to see if candidate's is more complete than ours
+        if voter_last_log_term < candidate_last_log_term or \
+            (voter_last_log_term == candidate_last_log_term and voter_last_log_index <= candidate_last_log_index): 
+            self.reset_election_timeout()
+
+            self.logger.info(f'Sending Success vote for term: {candidate_term} for {candidate_id}')
+            self.__log.cast_vote(candidate_term, candidate_id)
+            ## Since we are casting vote, at this point we don't know who the leader for this term is 
+            self.__log.update_leader('No leader')
+            return raftdb.VoteResponse(success = True, term = self.__log.get_term(), leaderId = self.__log.get_leader())                
+        else:
+            self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_id}')
+            return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
                 
-                if vote_response:
-                    vote = vote_response['success']
-                    # logger.debug(f'choice from {voter} is {choice}')
-                    if vote == True and self.status == config.STATE.CANDIDATE:
-                        self.update_votes()
-                    elif not vote:
-                        voter_term = vote_response['term']
-                        if voter_term > self.term:
-                            self.status = config.STATE.FOLLOWER
-                            ### Update self term?
-                            self.term = voter_term
-                    break
 
-
-    def choose_vote(self, candidate_term: int, candidate_log_index: int) -> bool:
+    def RequestVote(self, request, context):
         '''
         Decide whether to vote for candidate or not on receiving request vote RPC.
-       
-        Returns True if current node's term is less than candidate term 
-        OR
-        if current node's term is same as candidate term and has fewer or equal entries in log
 
-        Returns False otherwise
+        If candidateCurrentTerm > voterCurrentTerm, set voterCurrentTerm ← candidateCurrentTerm
+        (step down if leader or candidate)
+        If candidateCurrentTerm == voterCurrentTerm, votedFor is null or candidate_Id,
+        and candidate's log is at least as complete as local log,
+        grant vote and reset election timeout
+        else reject
+        to decide if log is more complete
+
+        if voterLastLogTerm < candidateLastLogTerm : OK
+        elif: voterLastLogTerm == candidateLastLogTerm and voterLastLogIndex <= candidateLastLogIndex: OK
+        else: reject vote
+
         '''
-        self.reset_election_timeout()
-        voter_last_log_index = self.__store.logIndex
-        voter_last_term = self.__store.log[voter_last_log_index].term
+        candidate_term, candidate_Id = request.term, request.candidateId
+        candidate_last_log_term = request.lastLogTerm
+        candidate_last_log_index = request.lastLogIndex
 
-        if voter_last_term < candidate_term or \
-                (voter_last_term == candidate_term and voter_last_log_index <= candidate_log_index): 
-            self.reset_election_timeout()
-            self.term = candidate_term
-            return True, self.term, voter_last_log_index
+        self.logger.info(f'Received vote request for term: {candidate_term} from {candidate_Id}')
+        self.logger.info(f'Candidate last log term: {candidate_last_log_term}, last log index {candidate_last_log_index}')
+       
+        # Reset election timeout so that the follower does not immediately start a new election
+        self.reset_election_timeout()
+
+        voter_term = self.__log.get_term()
+        voter_last_log_index = self.__log.get_log_idx()
+        
+        self.logger.debug(f'voter term {voter_term}, voter log index {voter_last_log_index}')
+        if voter_last_log_index == -1 : 
+            self.logger.debug(f'voter last log index is -1, setting last log term to 0')
+            voter_last_log_term = 0
         else:
-            return False, self.term, voter_last_log_index
+            self.logger.debug(f'voter last log term not zero, getting term from log')
+            voter_last_log_term = self.__log.get(voter_last_log_index)['term']
+
+
+        # Decide if we are giving a vote to candidate
+        if candidate_term > voter_term:
+            # Step down if we are the leader or candidate    
+            self.__log.revert_to_follower(candidate_term, 'No leader')
+            # check our logs to see if they are more complete than the candidate's 
+            return self.check_completeness_of_log(voter_last_log_term, voter_last_log_index,
+                                        candidate_last_log_term, candidate_last_log_index,
+                                        candidate_Id, candidate_term)
+
+        elif candidate_term < voter_term:
+
+            self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}, voter term: {voter_term}')
+            # Reject request vote
+            return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
+        
+        else:
+            # voter term and candidate term are equal
+            voted_for_term, voted_for_id = self.__log.get_voted_for()
+            self.logger.info("voted_for_term: " + str(voted_for_term))
+            self.logger.info("voted_for_id: " + str(voted_for_id))
+            self.logger.info(f'candidate id == {candidate_Id}, candidate term == {candidate_term}')
+            self.logger.info("############### VOTED FOR ##################################")
+            if voted_for_term == candidate_term:
+                if voted_for_id != candidate_Id:
+                    # already voted for someone else
+
+                    self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}, already voted for {voted_for_id}')
+                    return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
+            
+            elif voted_for_term < candidate_term or \
+                (voted_for_term == candidate_term and voted_for_id == candidate_Id): 
+                # We have not voted for anyone in this term, or we have already voted for this candidate
+                # If we are candidate for this term or leader, we would have already voted for ourself,
+                # So at this point we are already follower.
+                # Check log to see if candidate's is more complete than ours
+                return self.check_completeness_of_log(voter_last_log_term, voter_last_log_index,
+                                        candidate_last_log_term, candidate_last_log_index,
+                                        candidate_Id, candidate_term)
+            else:
+                self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
+                return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
    
