@@ -1,14 +1,15 @@
+from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class GetRequest(_message.Message):
     __slots__ = ["key"]
     KEY_FIELD_NUMBER: _ClassVar[int]
-    key: int
-    def __init__(self, key: _Optional[int] = ...) -> None: ...
+    key: _containers.RepeatedScalarFieldContainer[int]
+    def __init__(self, key: _Optional[_Iterable[int]] = ...) -> None: ...
 
 class GetResponse(_message.Message):
     __slots__ = ["code", "leaderId", "value"]
@@ -17,8 +18,8 @@ class GetResponse(_message.Message):
     VALUE_FIELD_NUMBER: _ClassVar[int]
     code: int
     leaderId: str
-    value: int
-    def __init__(self, code: _Optional[int] = ..., value: _Optional[int] = ..., leaderId: _Optional[str] = ...) -> None: ...
+    value: _containers.RepeatedScalarFieldContainer[int]
+    def __init__(self, code: _Optional[int] = ..., value: _Optional[_Iterable[int]] = ..., leaderId: _Optional[str] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
     __slots__ = ["serverId", "term"]
@@ -47,10 +48,10 @@ class LogEntry(_message.Message):
         SEQUENCE_NUMBER_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         clientid: int
-        key: int
+        key: _containers.RepeatedScalarFieldContainer[int]
         sequence_number: int
-        value: int
-        def __init__(self, key: _Optional[int] = ..., value: _Optional[int] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ...) -> None: ...
+        value: _containers.RepeatedScalarFieldContainer[int]
+        def __init__(self, key: _Optional[_Iterable[int]] = ..., value: _Optional[_Iterable[int]] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ...) -> None: ...
     CURRENT_TERM_FIELD_NUMBER: _ClassVar[int]
     ENTRY_FIELD_NUMBER: _ClassVar[int]
     LASTCOMMITINDEX_FIELD_NUMBER: _ClassVar[int]
@@ -82,10 +83,10 @@ class PutRequest(_message.Message):
     SEQUENCE_NUMBER_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]
     clientid: int
-    key: int
+    key: _containers.RepeatedScalarFieldContainer[int]
     sequence_number: int
-    value: int
-    def __init__(self, key: _Optional[int] = ..., value: _Optional[int] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ...) -> None: ...
+    value: _containers.RepeatedScalarFieldContainer[int]
+    def __init__(self, key: _Optional[_Iterable[int]] = ..., value: _Optional[_Iterable[int]] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ...) -> None: ...
 
 class PutResponse(_message.Message):
     __slots__ = ["code", "leaderId"]

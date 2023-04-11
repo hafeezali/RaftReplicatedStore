@@ -32,7 +32,7 @@ class Client:
         self.leader_id = leader_id
         return self.requestGet(key)
         
-    def redirectToLeaderPut(self, leader_id, key,value, clientid, sequence_number):
+    def redirectToLeaderPut(self, leader_id, key, value, clientid, sequence_number):
         print("Redirecting to leader with id: " + leader_id)
         self.server_addr = peer_list_mappings[leader_id]
         self.leader_id = leader_id
@@ -122,10 +122,16 @@ if __name__ == '__main__':
     while True:
         reqType = int(input("Options - Get: 1, Put: 2, Quit: 3\n"))
         if reqType == 1:
-            key = int(input("Enter key\n"))
-            client.requestGet(key)
+            keys = list(map(int, input("Enter key(s)\n").strip().split()))
+            client.requestGet(keys)
         elif reqType == 2:
-            inputs = list(map(int, input("\nEnter key, value, clientid [ex: 1 2 3]\n").strip().split()))[:3]
+            keys = list(map(int, input("Enter key(s)\n").strip().split()))
+            values = list(map(int, input("Enter values(s)\n").strip().split()))
+            clientId = int(input("\nEnter clientid \n"))
+            inputs = list()
+            inputs.append(keys)
+            inputs.append(values)
+            inputs.append(clientId)
             inputs.append(client.get_sequence_number())
             client.requestPut(*inputs)
             client.increment_sequence_number()

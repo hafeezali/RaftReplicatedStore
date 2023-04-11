@@ -69,3 +69,46 @@ docker compose -f docker-compose.yaml up -d
 To stop:
 
 docker-compose down --remove-orphans
+
+
+## Test Scenarios:
+
+1. Remove leader node. Observe that PUT fails because of no-consensus. [SUCCESS]
+- Start servers
+- Send some puts. Have them succeed
+- Kill leader node. Observe client getting redirected to new leader eventually for new PUT
+- See PUT succeed
+- Kill that leader as well
+- Now PUTS/GETS should fail because system is not available (majority down)
+
+2. After adding the same node back, it should become a follower. [SUCCESS]
+
+3. Remove a follower node. Observe that PUT, GET succeeds.
+- Follower should keep triggering election with no vain.
+- After adding the same node back, it should become follower and have its logs cleaned.
+
+4. Test durability
+    1. kill leader node (all 3 one after the other) and try get
+
+5. Safety - testing that you don’t have two leaders anytime
+
+6. Log matching: we are testing starting nodes with diff configuration and seeing ki they are overwritten.
+
+7. Request Votes, append entries and heart beat handlers are 3 inter-dependent processes. You can check if,
+- Will your node serialize two concurrent request votes?
+- Are ur append entries and heart beat handler serialized (ur scenario)?
+
+## Measurements:
+
+1. Availability, throughput, and latency
+- Throughput in two ways : single client’s max throughput and aggregate throughput using multiple clients.
+
+## Extra functionality: 
+
+- Membership change, memcache, multi-put and multi-get.
+
+## Issues:
+
+1. We don’t have a staging area - So, after appending, if leader doesn’t get majority, we will not be able to delete it. We try infinitely. 
+2. Currently, we are retrying if append entries fails in the consensus layer. So, if a node goes down (maybe because of membership changes), we will have a dangling thread which will eventually kill resources
+3. Last entry will never get committed on followers. This is because we must have correction of logs running in a backend thread (perhaps heartbeat thread).

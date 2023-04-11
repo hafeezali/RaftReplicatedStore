@@ -45,9 +45,10 @@ class SqliteStore:
 
 	def put(self, key, value):
 		self.logger.info("Sqlite put called for key: " + str(key) + ", value: " + str(value))
-		cursor = self.conn.cursor()
-		cursor.execute("INSERT OR REPLACE INTO key_value_store (key, value) VALUES (?, ?)", (key, value))
-		self.conn.commit()
+		for (k, v) in zip(key, value):
+			cursor = self.conn.cursor()
+			cursor.execute("INSERT OR REPLACE INTO key_value_store (key, value) VALUES (?, ?)", (k, v))
+			self.conn.commit()
 
 	def clear_backup(self):
 		self.logger.info("Clear backup for Sqlite db called")

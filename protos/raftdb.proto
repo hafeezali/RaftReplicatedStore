@@ -15,19 +15,19 @@ service Consensus {
 }
 
 message GetRequest {
-	int32 key = 1;
+	repeated int32 key = 1;
 }
 
 message PutRequest {
-	int32 key = 1;
-	int32 value = 2;
+	repeated int32 key = 1;
+	repeated int32 value = 2;
 	int32 clientid = 3;
 	int32 sequence_number = 4;
 }
 
 message GetResponse {
 	int32 code = 1;
-	int32 value = 2;
+	repeated int32 value = 2;
 	string leaderId = 3;
 }
 
@@ -49,8 +49,8 @@ message HeartbeatResponse {
 
 message LogEntry {
 	message Entry {
-		int32 key = 1;
-		int32 value = 2;
+		repeated int32 key = 1;
+		repeated int32 value = 2;
 		int32 clientid = 3;
 		int32 sequence_number = 4;
 	}
