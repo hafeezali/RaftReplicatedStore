@@ -152,7 +152,8 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
                            
 
                     #    correcting the log entry
-                    while prev_log_index <= log_index_to_commit - 1:
+                    while prev_log_index < log_index_to_commit - 1:
+                        self.logger.info('Im correcting log. prev_log_index: ' + str(prev_log_index) + ', log_index_to_commit: ' + str(log_index_to_commit))
                         # self.logger.debug(f'Stuck here')
                         # if it recieves an append entry response with higher term, it will revert to follower and break 
                         # out of the loop.
@@ -179,6 +180,8 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
 
                         if self.majority_counter[key] >= majority and key in self.ready_to_commit:
                             self.ready_to_commit[key] = 1
+                else:
+                    self.logger.debug('Unknown error: response code : ' + str(response.code))
             
             except grpc.RpcError as e:
                 status_code = e.code()
