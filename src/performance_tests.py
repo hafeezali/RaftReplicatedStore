@@ -27,7 +27,7 @@ class PerformanceTests:
     def __init__(self, client: ClientPerf, client_id, key_start):
         self.client = client
         self.client_id = client_id
-        self.num_elements = 100
+        self.num_elements = 1000
         self.values = []
         self.key_start = key_start
         self.average_put_latencies = []
@@ -40,7 +40,9 @@ class PerformanceTests:
             response = (False, -1)
             start_time = time.time()
             while response[0] == False:
-                response = self.client.requestGet(i+self.key_start)
+                inp = list()
+                inp.append(i+self.key_start)
+                response = self.client.requestGet(inp)
             end_time = time.time()
             if response[1] != self.values[i]:
                 print(f"!!!!!!!!!! GET returned a weird value, expected: {self.values[i]}, actual {response[1]}")
@@ -65,7 +67,11 @@ class PerformanceTests:
         self.values = random.sample(range(10, 3000), self.num_elements)
         
         for i, item in enumerate(self.values):
-            inputs = [i + self.key_start, item, self.client_id]
+            key = list()
+            key.append(i + self.key_start)
+            value = list()
+            value.append(item)
+            inputs = [key, value, self.client_id]
             response = False
             start_time = time.time()
             while response == False:

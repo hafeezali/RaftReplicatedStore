@@ -1,5 +1,9 @@
 # RaftReplicatedStore
 
+## Team Members:
+
+Group 3: Hafeez Ali Anees Ali, Sunaina Krishnamoorthy, Saanidhi Arora
+
 ## Installation:
 
 python3 -m pip install grpcio
@@ -12,7 +16,7 @@ python3 -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./sr
 ## Open issues:
 
 1. After generaring proto files, modify import of raftdb_pb2 and raftdb_pb2_grpc to protos.raftdb_pb2 and protos.raftdb_pb2_grpc 
-2. Stupid gitignore not working
+2. gitignore not working
 3. Add documentation
 	- lastCommitIndex : gives position in log
 	- termIndex : index for given term

@@ -188,16 +188,16 @@ class Log:
 
 		try:
 			log_file = shelve.open(self.log_path, 'c', writeback=True)
-			self.debug_check_log_file(log_file)
+			# self.debug_check_log_file(log_file)
 			self.logger.info("Trying to persist: " + str(self.log[index]))
 			log_file[str(index)] = self.log[index]
 			self.logger.info("now im here")
 			log_file.close()
 		except Exception as e:
-			self.logger.info(f'Exception, details: {e.details()}') 
-			return True
+			self.logger.info(f'Exception, details: {e}') 
+			return False
 
-		# self.logger.info("Flush done")
+		self.logger.info("Flush done")
 		return True
 
 	'''
@@ -310,8 +310,23 @@ class Log:
 		self.logger.info("Get at index: " + str(index))
 		return self.log[index]
 
+	def convert_optionals_to_list(self, entry):
+		result = dict()
+		result['term'] = entry['term']
+		result['clientid'] = entry['clientid']
+		result['sequence_number'] = entry['sequence_number']
+		result['key'] = list()
+		result['value'] = list()
+		for k in entry['key']:
+			result['key'].append(k)
+		for v in entry['value']:
+			result['value'].append(v)
+		return result
+
 	def append(self, entry):
 		self.logger.info("Append entry- key: " + str(entry['key']) + ' value: ' + str(entry['value']))
+
+		entry = self.convert_optionals_to_list(entry)
 
 		with self.lock:
 			self.logger.info("Log size before: " + str(len(self.log)))
@@ -327,6 +342,8 @@ class Log:
 
 	def insert_at(self, index, entry):
 		self.logger.info("Insert at index: " + str(index))
+
+		entry = self.convert_optionals_to_list(entry)
 
 		with self.lock:
 			if index == self.log_idx + 1:

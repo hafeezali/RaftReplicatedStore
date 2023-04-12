@@ -75,6 +75,7 @@ class Client:
                     print(f"Client request for Get key: {key} timed out, details: {status_code} {e.details()}\n")
                 else:
                     print(f'Connection to {self.leader_id} failed. Trying the next server, details: {status_code} {e.details()}')
+                    time.sleep(1000)
                     self.leader_id = self.get_next_server(self.leader_id)
                     self.redirectToLeaderGet(self.leader_id, key)
 
@@ -111,6 +112,7 @@ class Client:
                     print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
                 else:
                     print(f'Connection to {self.leader_id} failed. Trying the next server, details: {status_code} {e.details()}')
+                    time.sleep(1000)
                     self.leader_id = self.get_next_server(self.leader_id)
                     self.redirectToLeaderPut(self.leader_id, key, value, clientid, sequence_number)
 
