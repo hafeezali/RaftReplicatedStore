@@ -27,7 +27,7 @@ class PerformanceTests:
     def __init__(self, client: ClientPerf, client_id, key_start):
         self.client = client
         self.client_id = client_id
-        self.num_elements = 1000
+        self.num_elements = 10
         self.values = []
         self.key_start = key_start
         self.average_put_latencies = []

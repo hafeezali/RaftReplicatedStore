@@ -2,7 +2,9 @@
 
 ## Team Members:
 
-Group 3: Hafeez Ali Anees Ali, Sunaina Krishnamoorthy, Saanidhi Arora
+Group 3: 
+
+Hafeez Ali Anees Ali, Sunaina Krishnamoorthy, Saanidhi Arora
 
 ## Installation:
 
