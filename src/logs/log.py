@@ -9,7 +9,7 @@ import time
 import shelve
 
 from raft.config import STATE
-from raft.config import SERVER_SLEEP_TIME
+from raft.config import SERVER_SLEEP_TIME, FLUSH_CONFIG_TIME
 
 '''
 Log layer responsible for
@@ -212,7 +212,7 @@ class Log:
 					config_file[key] = self.configs[key]
 
 			config_file.close()
-			time.sleep(SERVER_SLEEP_TIME)
+			time.sleep(FLUSH_CONFIG_TIME)
 
 	'''
 	This will only be called by the leader node. This commits log entry at index. Entries can be committed out of order in leader

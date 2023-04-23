@@ -1,6 +1,12 @@
 from os import path
+from threading import Thread
+from queue import Queue
+import time
 
 import shelve
+
+BATCH_SIZE = 200
+FLUSH_TIMEOUT = 10
 
 class MemoryStore:
 
@@ -14,6 +20,10 @@ class MemoryStore:
 
 		self.db = dict()
 		self.recover()
+		self.apply_queue = Queue()
+
+		Thread(target=self.flush_apply_queue).start()
+
 
 	def clear_backup(self):
 		self.logger.info("Deleting disk backup")
@@ -57,4 +67,26 @@ class MemoryStore:
 		self.logger.info("Updating key: " + str(key) + ", value: " + str(value))
 		for (k, v) in zip(key, value):
 			self.db.update({k: v})
-			self.flush(k, v)
+			# self.flush(k, v)
+			self.apply_queue.put((k, v))
+
+	def flush_apply_queue(self):
+		self.logger.info("Flushing from apply queue to disk")
+		
+		backup_file = shelve.open(self.db_backup_file_path, 'c', writeback=True)
+		batch_counter = 0
+		start_time = time.time()
+
+		while True:
+			key, value = self.apply_queue.get()
+			backup_file[str(key)] = value
+			batch_counter += 1
+			if batch_counter == BATCH_SIZE or time.time() - start_time >= FLUSH_TIMEOUT:
+				backup_file.sync()
+				self.logger.info(f"Flush batch done, batch count: {batch_counter}")
+				batch_counter = 0
+				start_time = time.time()
+
+
+
+		
