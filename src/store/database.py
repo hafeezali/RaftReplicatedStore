@@ -2,7 +2,7 @@ from collections import deque
 from threading import Lock, Thread
 
 from store.memorydatabase.mem_store import MemoryStore
-from store.sqlitedb.sqlite_store import SqliteStore
+# from store.sqlitedb.sqlite_store import SqliteStore
 import shelve
 
 '''
@@ -16,8 +16,9 @@ class Database:
 
 		if type == 'memory':
 			self.db = MemoryStore(server_id, logger)
-		else:
-			self.db = SqliteStore(server_id, logger)
+		# removing the sql part
+		# else:
+		# 	self.db = SqliteStore(server_id, logger)
 
 		self.lock = Lock()
 		

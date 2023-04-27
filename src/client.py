@@ -64,7 +64,12 @@ class Client:
                     response = self.redirectToLeaderGet(response.leaderId.replace("'", ""), key)
 
                 elif response.code == config.RESPONSE_CODE_OK:
-                    print(f"GET for key: {key} Succeeded, value: {response.value}\n")
+                    value_list = list(response.value)
+                    for i in range(0,len(value_list)) :
+                        if value_list[i] == -999 :
+                            print(f"Key {key[i]} does not exist")
+                        else :
+                            print(f"GET for key: {key[i]} Succeeded, value: {value_list[i]}\n")
                 
                 else:
                     print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
