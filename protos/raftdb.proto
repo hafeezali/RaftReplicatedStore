@@ -12,6 +12,7 @@ service RaftElectionService {
 
 service Consensus {
 	rpc AppendEntries (LogEntry) returns (LogEntryResponse) {}
+	rpc AppendCorrection (CorrectionEntry) returns (CorrectionEntryResponse) {}
 }
 
 message GetRequest {
@@ -39,6 +40,9 @@ message PutResponse {
 message HeartbeatRequest {
 	int32 term = 1;
 	string serverId = 2;
+	int32 lastCommitIndex = 3;
+	int32 log_idx = 4;
+	int32 log_term = 5;
 }
 
 message HeartbeatResponse {
@@ -67,6 +71,28 @@ message LogEntry {
 message LogEntryResponse {
 	int32 code = 1;
 	int32 term = 2;
+	int32 lastSafeIndex = 3;
+}
+
+message CorrectionEntry {
+	message Correction {
+		int32 key = 1;
+		int32 value = 2;
+		int32 clientid = 3;
+		int32 sequence_number = 4;
+		int32 term = 5;
+		int32 logIndex = 6;
+	}
+
+	repeated Correction entries = 1;
+	int32 lastCommitIndex = 2;
+	int32 current_term = 3;
+}
+
+message CorrectionEntryResponse {
+	int32 code = 1;
+	int32 term = 2;
+	int32 lastSafeIndex = 3;
 }
 
 message VoteRequest {

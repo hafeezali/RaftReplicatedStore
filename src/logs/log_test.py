@@ -37,7 +37,7 @@ def test_normal_functionality(log, db):
 
 	assert idx == 0
 
-	log.commit(idx)
+	log.commit_upto(idx)
 
 	time.sleep(5000/1000)
 
@@ -53,7 +53,7 @@ def test_normal_functionality(log, db):
 
 	assert idx == 1
 
-	log.commit(idx)
+	log.commit_upto(idx)
 
 	time.sleep(1000/1000)
 
@@ -68,7 +68,7 @@ def test_normal_functionality(log, db):
 
 	assert idx == 2
 
-	log.commit(idx)
+	log.commit_upto(idx)
 
 	time.sleep(1000/1000)
 
@@ -83,7 +83,7 @@ def test_normal_functionality(log, db):
 
 	assert idx == 3
 
-	log.commit(idx)
+	log.commit_upto(idx)
 
 	time.sleep(1000/1000)
 
@@ -113,7 +113,7 @@ def test_last_commit_idx(log, db):
 
 	assert idx == 0
 
-	log.commit(idx)
+	log.commit_upto(idx)
 
 	assert log.debug_get_last_commit_idx() == 0
 
@@ -129,9 +129,9 @@ def test_last_commit_idx(log, db):
 
 	assert idx == 2
 
-	log.commit(idx)
+	log.commit_upto(idx)
 
-	assert log.debug_get_last_commit_idx() == 0
+	assert log.debug_get_last_commit_idx() == 2
 
 	# append fourth entry
 	sequence_number = sequence_number + 1

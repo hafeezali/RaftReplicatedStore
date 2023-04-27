@@ -1,13 +1,9 @@
-from collections import deque
-from threading import Lock, Thread
-
 from store.memorydatabase.mem_store import MemoryStore
-# from store.sqlitedb.sqlite_store import SqliteStore
-import shelve
+
 
 '''
 TODO:
-1. Get should be surrounded by try catch statements. Throw a key error if key is missing
+1. [IN_PROGRESS] Get should be surrounded by try catch statements. Throw a key error if key is missing
 '''
 
 class Database:
