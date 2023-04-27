@@ -102,21 +102,25 @@ class ClientPerf:
                 if response.code == config.RESPONSE_CODE_REDIRECT :
                     response = self.redirectToLeaderPut(response.leaderId.replace("'", ""), key, value, clientid)
                     self.increment_sequence_number()
-                    return response
+                    # returning leader id as it is getting used in functional tests
+                    return response, response.leaderId.replace("'", "")
+
                 elif response.code == config.RESPONSE_CODE_OK:
                     # print(f"Put of key: {key}, value: {value} succeeded!\n")
                     self.increment_sequence_number()
-                    return True
+                    return True, response.leaderId.replace("'", "")
 
                 elif response.code == config.RESPONSE_CODE_REJECT:
                     print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
                     self.increment_sequence_number()
-                    return False
+                    return False, response.leaderId.replace("'", "")
+
                         
                 else:
                     print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
                     self.increment_sequence_number()
-                    return False
+                    return False, response.leaderId.replace("'", "")
+
                 
             except grpc.RpcError as e:
                 status_code = e.code()
