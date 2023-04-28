@@ -84,6 +84,9 @@ class Client:
                     self.leader_id = self.get_next_server(self.leader_id)
                     self.redirectToLeaderGet(self.leader_id, key)
 
+    # Send requestPut to all peers - use futures. Wait for supermajority (f + ceil(f/2) + 1). Wait for leader id.
+    # Retry if not receiving super majority or super majority times out.
+    # Retry timeout is different from grpc timeout. grpc timeout must not be retried.
     def requestPut(self, key, value, clientid, sequence_number):
         with grpc.insecure_channel(self.server_addr) as channel:
             stub = raftdb_grpc.ClientStub(channel)

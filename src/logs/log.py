@@ -499,3 +499,28 @@ class Log:
 		self.logger.info("last_applied_idx: " + str(self.last_applied_idx))
 		self.logger.info("log_idx: " + str(self.log_idx))
 		self.logger.info("term: " + str(self.term))
+
+	def append_to_dura_log(self, entry):
+		pass
+
+	# returns start and last index
+	# modify this with lock only
+	def copy_dura_to_consensus_log(self):
+		pass
+
+	# only called by follower
+	def clear_dura_log(self, keys):
+		pass
+
+	# Only called by leader
+	def clear_dura_log(self, index):
+		pass
+
+	def get_dura_log(self):
+		pass
+
+
+	# flush dura log always 
+	# flush consensus log immediateoy
+	# include dura log index in configs. it needs to be persisted the same way as the other configs
+	# dura log index needs to be updated after clear_dura_log and after append_dura_log after acquiring lock!
