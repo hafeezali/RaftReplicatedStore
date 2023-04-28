@@ -10,7 +10,7 @@ class Logging:
         server_id = server_id.replace("'", "")
         self.logger = logging.getLogger(server_id)
 
-        log_folder_path = '/Users/sunaina/logs_dir3'
+        log_folder_path = '/home/logs_dir'
         os.path.dirname(log_folder_path)
         if not os.path.exists(log_folder_path):
             os.makedirs(log_folder_path)

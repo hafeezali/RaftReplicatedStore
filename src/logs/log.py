@@ -26,7 +26,7 @@ Log layer responsible for
 	- status
 	- voted_for
 	- leader_id
-	- last_applied_command_per_client
+	- last_appended_command_per_client
 
 TODO:
 1. All persistent state can be collated into one dict. Easier persistence and recovery (but cant implement finer locks)
@@ -73,7 +73,7 @@ class Log:
 			'server_id': None
 		}
 		self.configs["leader_id"] = None
-		self.configs["last_applied_command_per_client"] = dict()
+		self.configs["last_appended_command_per_client"] = dict()
 		self.configs["last_flushed_idx"] = -1
 
 		# central lock for all configs that can be accessed by multiple threads
@@ -150,8 +150,8 @@ class Log:
 				self.configs["voted_for"] = config_file['voted_for']
 			if config_file['leader_id']:
 				self.configs["leader_id"] = config_file['leader_id']
-			if config_file['last_applied_command_per_client']:
-				self.configs["last_applied_command_per_client"] = config_file['last_applied_command_per_client']
+			if config_file['last_appended_command_per_client']:
+				self.configs["last_appended_command_per_client"] = config_file['last_appended_command_per_client']
 			if config_file['last_flushed_idx']:
 				self.configs['last_flushed_idx'] = config_file['last_flushed_idx']
 		except KeyError as e:
@@ -163,7 +163,7 @@ class Log:
 			config_file['status'] = self.configs["status"]
 			config_file['voted_for'] = self.configs["voted_for"]
 			config_file['leader_id'] = self.configs["leader_id"] 
-			config_file['last_applied_command_per_client'] = self.configs["last_applied_command_per_client"] 
+			config_file['last_appended_command_per_client'] = self.configs["last_appended_command_per_client"] 
 			config_file['last_flushed_idx'] = self.configs['last_flushed_idx']
 
 		log_file.close()
@@ -302,7 +302,6 @@ class Log:
 						self.logger.info('Applying value: ' + str(entry['value']) + ' to key: ' + str(entry['key']))
 						self.database.put(entry['key'], entry['value'], idx)
 						self.configs["last_applied_idx"] = self.configs["last_applied_idx"] + 1
-						self.configs["last_applied_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 					else:
 						break
 					idx = idx + 1
@@ -333,6 +332,8 @@ class Log:
 			self.configs["log_idx"] += 1
 			self.log[self.configs["log_idx"]] = entry
 			self.log[self.configs["log_idx"]]['commit_done'] = False
+
+			self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 
 			self.logger.info("Log size after: " + str(len(self.log)))
 			self.logger.info("Append entry done")
@@ -449,12 +450,12 @@ class Log:
 
 		self.logger.info("Case vote done")
 			
-	def get_last_committed_sequence_for(self, client_id):
-		self.logger.info("Get last committed sequence for: " + str(client_id))
+	def get_last_appended_sequence_for(self, client_id):
+		self.logger.info("Get last appended sequence for: " + str(client_id))
 
 		with self.lock:
-			if client_id in self.configs["last_applied_command_per_client"]:
-				return self.configs["last_applied_command_per_client"][client_id]
+			if client_id in self.configs["last_appended_command_per_client"]:
+				return self.configs["last_appended_command_per_client"][client_id]
 			else:
 				return -1
 
@@ -522,7 +523,6 @@ class Log:
 					print(f" Entry key {entry['key']}, value: {entry['value']}, index: {idx}")
 					self.database.put(entry['key'], entry['value'], idx)
 					self.configs["last_applied_idx"] = self.configs["last_applied_idx"] + 1
-					self.configs["last_applied_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 				else:
 					break
 				idx = idx + 1

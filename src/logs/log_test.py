@@ -154,9 +154,9 @@ def test_recovery(log, db):
 	assert log.get_log_idx() == 3
 	assert log.debug_get_last_commit_idx() == 3
 	assert log.is_applied(3)
-	assert log.get_last_committed_sequence_for(2) == 2
-	assert log.get_last_committed_sequence_for(1) == 3
-	assert log.get_last_committed_sequence_for(3) == 4
+	assert log.get_last_appended_sequence_for(2) == 2
+	assert log.get_last_appended_sequence_for(1) == 3
+	assert log.get_last_appended_sequence_for(3) == 4
 
 	# recovery should have occurred on db as well
 	assert db.get(100) == 3001

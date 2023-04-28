@@ -41,10 +41,10 @@ class Consensus(raftdb_grpc.ConsensusServicer) :
         self.logger.debug(f'Handling the put request for client id - {entry.clientid} and sequence number - {entry.sequence_number}')
 
         # case where the leader fails, checks if already applied to the state machine
-        last_committed_seq = self.__log.get_last_committed_sequence_for(entry.clientid)
+        last_appended_seq = self.__log.get_last_appended_sequence_for(entry.clientid)
 
-        if last_committed_seq == entry.sequence_number:
-            self.logger.debug(f'The request has already been executed.')
+        if last_appended_seq == entry.sequence_number:
+            self.logger.debug(f'The request has already been appended to consensus log.')
             return 'OK'
 
         # initialize counter and commit_done to check majority and commit
