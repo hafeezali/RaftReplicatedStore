@@ -2,6 +2,7 @@ from os import path
 from threading import Thread
 from queue import Queue
 import time
+import raft.config as config
 
 import shelve
 
@@ -62,7 +63,11 @@ class MemoryStore:
 
 	def get(self, key):
 		self.logger.info("Fetching value for key: " + str(key))
-		return self.db.get(key, None)
+		# error handling for get when key not found
+		if key in self.db :
+			return self.db.get(key)
+		else :
+			return config.KEY_NOT_FOUND
 
 	def put(self, key, value, index):
 		self.logger.info("Updating key: " + str(key) + ", value: " + str(value))

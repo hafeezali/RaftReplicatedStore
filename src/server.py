@@ -43,8 +43,8 @@ class Server(raftdb_grpc.ClientServicer):
             values = list()
             for k in request.key:
                 v = self.store.get(k)
-                if v is not None:
-                    values.append(v)
+                # None removed, now adding the value not found (-999) in the list. Handling the value on the client side
+                values.append(v) 
             return raftdb.GetResponse(code = config.RESPONSE_CODE_OK, value = values, leaderId = leader_id)
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
