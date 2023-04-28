@@ -10,6 +10,7 @@ import shelve
 
 from raft.config import STATE
 from raft.config import SERVER_SLEEP_TIME, FLUSH_CONFIG_TIME
+from store.database import Database
 
 '''
 Log layer responsible for
@@ -42,7 +43,7 @@ class Log:
 	database: instance of mem_store or rocks_store used by this server
 	logger: common logger used across node
 	'''
-	def __init__(self, server_id, database, logger):
+	def __init__(self, server_id, database : Database, logger):
 
 		self.server_id = server_id
 		self.database = database
@@ -73,6 +74,7 @@ class Log:
 		}
 		self.configs["leader_id"] = None
 		self.configs["last_applied_command_per_client"] = dict()
+		self.configs["last_flushed_idx"] = -1
 
 		# central lock for all configs that can be accessed by multiple threads
 		self.lock = Lock()
@@ -149,6 +151,8 @@ class Log:
 				self.configs["leader_id"] = config_file['leader_id']
 			if config_file['last_applied_command_per_client']:
 				self.configs["last_applied_command_per_client"] = config_file['last_applied_command_per_client']
+			if config_file['last_flushed_idx']:
+				self.configs['last_flushed_idx'] = config_file['last_flushed_idx']
 		except KeyError as e:
 			self.logger.info("KeyError")
 			config_file['last_commit_idx'] = self.configs["last_commit_idx"]
@@ -159,9 +163,14 @@ class Log:
 			config_file['voted_for'] = self.configs["voted_for"]
 			config_file['leader_id'] = self.configs["leader_id"] 
 			config_file['last_applied_command_per_client'] = self.configs["last_applied_command_per_client"] 
+			config_file['last_flushed_idx'] = self.configs['last_flushed_idx']
 
 		log_file.close()
 		config_file.close()
+
+		# Apply entries from log that were not yet flushed
+		self.logger.info(f"Config recovery done, need to replay logs from {self.configs['last_flushed_idx']}")
+		self.apply_from_index(self.configs['last_flushed_idx'])
 
 		# remove this
 		self.debug_print_log()
@@ -203,6 +212,8 @@ class Log:
 	'''
 	def flush_config(self):
 		# self.logger.info("Flush config")
+
+		self.configs["last_flushed_idx"] = self.database.get_last_flushed_index()
 
 		while True:
 			config_file = shelve.open(self.config_path, 'c', writeback=True)
@@ -289,7 +300,7 @@ class Log:
 					if flush_res:
 						entry = self.get(idx)
 						self.logger.info('Applying value: ' + str(entry['value']) + ' to key: ' + str(entry['key']))
-						self.database.put(entry['key'], entry['value'])
+						self.database.put(entry['key'], entry['value'], idx)
 						self.configs["last_applied_idx"] = self.configs["last_applied_idx"] + 1
 						self.configs["last_applied_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 					else:
@@ -473,3 +484,42 @@ class Log:
 		self.logger.info("last_applied_idx: " + str(self.configs["last_applied_idx"]))
 		self.logger.info("log_idx: " + str(self.configs["log_idx"]))
 		self.logger.info("term: " + str(self.configs["term"]))
+
+
+	'''
+	Apply entries from log that had not previously been flushed to disk before failure
+	
+    Only called from recover method to apply entries that were not part of the snapshot.
+
+	'''
+	def apply_from_index(self, idx):
+		
+		start_idx = idx
+		self.configs['last_applied_idx'] = idx
+		self.logger.info(f"Resetting applied indext to {idx}")
+		
+		with self.lock:
+			self.logger.info(f"Apply_from_index {idx} started")
+			c_idx = self.configs["last_commit_idx"]
+			idx = self.configs["last_applied_idx"] + 1
+			while idx <= c_idx:
+				flush_res = self.flush(idx)
+				if flush_res:
+					entry = self.get(idx)
+					self.logger.info('Applying value: ' + str(entry['value']) + ' to key: ' + str(entry['key']))
+					self.database.put(entry['key'], entry['value'], idx)
+					self.configs["last_applied_idx"] = self.configs["last_applied_idx"] + 1
+					self.configs["last_applied_command_per_client"].update({entry['clientid']: entry['sequence_number']})
+				else:
+					break
+				idx = idx + 1
+
+			self.logger.info(f"Apply_from_index finished, from {start_idx} to {c_idx}")
+			
+			# Do all items right away for recovery
+			# time.sleep(SERVER_SLEEP_TIME)
+
+
+
+	
+

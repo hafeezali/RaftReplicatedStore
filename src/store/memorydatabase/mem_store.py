@@ -21,6 +21,7 @@ class MemoryStore:
 		self.db = dict()
 		self.recover()
 		self.apply_queue = Queue()
+		self.last_flushed_ind = -1
 
 		Thread(target=self.flush_apply_queue).start()
 
@@ -63,12 +64,15 @@ class MemoryStore:
 		self.logger.info("Fetching value for key: " + str(key))
 		return self.db.get(key, None)
 
-	def put(self, key, value):
+	def put(self, key, value, index):
 		self.logger.info("Updating key: " + str(key) + ", value: " + str(value))
 		for (k, v) in zip(key, value):
 			self.db.update({k: v})
 			# self.flush(k, v)
-			self.apply_queue.put((k, v))
+			self.apply_queue.put((k, v, index))
+
+	def get_last_flushed_index(self):
+		return self.last_flushed_ind
 
 	def flush_apply_queue(self):
 		self.logger.info("Flushing from apply queue to disk")
@@ -78,11 +82,16 @@ class MemoryStore:
 		start_time = time.time()
 
 		while True:
-			key, value = self.apply_queue.get()
+			key, value, index = self.apply_queue.get()
 			backup_file[str(key)] = value
 			batch_counter += 1
 			if batch_counter == BATCH_SIZE or time.time() - start_time >= FLUSH_TIMEOUT:
 				backup_file.sync()
+
+				# Update to the last index of the batch that was flushed 
+				self.last_flushed_ind = index
+				self.logger.info(f"Flush upto index {index} done.")
+
 				self.logger.info(f"Flush batch done, batch count: {batch_counter}")
 				batch_counter = 0
 				start_time = time.time()

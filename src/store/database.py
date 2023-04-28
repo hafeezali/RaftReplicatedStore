@@ -24,8 +24,11 @@ class Database:
 	def get(self, key):
 		return self.db.get(key)
 
-	def put(self, key, value):
-		self.db.put(key, value)
+	def put(self, key, value, index):
+		self.db.put(key, value, index)
 
 	def clear_backup(self):
 		self.db.clear_backup()
+
+	def get_last_flushed_index(self):
+		self.db.get_last_flushed_index()
