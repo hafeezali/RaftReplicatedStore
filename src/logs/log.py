@@ -110,6 +110,7 @@ class Log:
 		config_file['last_commit_idx'] = self.configs["last_commit_idx"]
 		config_file['log_idx'] = self.configs["log_idx"]
 		config_file['last_applied_idx'] = self.configs["last_applied_idx"]
+		config_file["last_flushed_idx"] = self.configs["last_flushed_idx"]
 
 		log_file.close()
 		config_file.close()
@@ -213,13 +214,12 @@ class Log:
 	def flush_config(self):
 		# self.logger.info("Flush config")
 
-		self.configs["last_flushed_idx"] = self.database.get_last_flushed_index()
-
 		while True:
+			self.configs["last_flushed_idx"] = self.database.get_last_flushed_index()
 			config_file = shelve.open(self.config_path, 'c', writeback=True)
 			with self.lock:
 				for key in self.configs:
-					self.logger.info("Inside flush config: " + str(key) + ". Persisting config")
+					# self.logger.info("Inside flush config: " + str(key) + ". Persisting config")
 					config_file[key] = self.configs[key]
 
 			config_file.close()
@@ -466,6 +466,7 @@ class Log:
 			self.configs["last_commit_idx"] = -1
 			self.configs["log_idx"] = -1
 			self.configs["last_applied_idx"] = -1
+			self.configs["last_flushed_idx"] = -1
 			self.clear_log_backup()
 
 		self.logger.info("clear done")
@@ -495,6 +496,11 @@ class Log:
 	def apply_from_index(self, idx):
 		
 		start_idx = idx
+		print(f"start index: {start_idx}")
+
+		# Resetting last_applied_idx to the last index that was applied and flushed to disk
+		# Any changes that were applied to in mem but not flused are lost on server crash
+		# We will replay logs from the last flushed index, and reapply those changes to in mem state
 		self.configs['last_applied_idx'] = idx
 		self.logger.info(f"Resetting applied indext to {idx}")
 		
@@ -502,11 +508,18 @@ class Log:
 			self.logger.info(f"Apply_from_index {idx} started")
 			c_idx = self.configs["last_commit_idx"]
 			idx = self.configs["last_applied_idx"] + 1
+			
+			print(f"last applied index {self.configs['last_applied_idx']}")
+			print(f"last commit index: {c_idx}")
+			print(idx)
+
 			while idx <= c_idx:
 				flush_res = self.flush(idx)
 				if flush_res:
 					entry = self.get(idx)
 					self.logger.info('Applying value: ' + str(entry['value']) + ' to key: ' + str(entry['key']))
+					print(f"entry: {entry}")
+					print(f" Entry key {entry['key']}, value: {entry['value']}, index: {idx}")
 					self.database.put(entry['key'], entry['value'], idx)
 					self.configs["last_applied_idx"] = self.configs["last_applied_idx"] + 1
 					self.configs["last_applied_command_per_client"].update({entry['clientid']: entry['sequence_number']})
@@ -516,8 +529,6 @@ class Log:
 
 			self.logger.info(f"Apply_from_index finished, from {start_idx} to {c_idx}")
 			
-			# Do all items right away for recovery
-			# time.sleep(SERVER_SLEEP_TIME)
 
 
 

@@ -14,8 +14,8 @@ class Database:
 
 	def __init__(self, server_id, logger, type = 'memory'):
 
-		if type == 'memory':
-			self.db = MemoryStore(server_id, logger)
+		# if type == 'memory':
+		self.db = MemoryStore(server_id, logger)
 		# removing the sql part
 		# else:
 		# 	self.db = SqliteStore(server_id, logger)

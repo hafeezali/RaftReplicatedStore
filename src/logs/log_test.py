@@ -13,8 +13,8 @@ from logger import Logging
 
 def create_entry(key, value, term, clientid, sequence_number):
 	entry = {
-		'key': key,
-		'value': value,
+		'key': [key],
+		'value': [value],
 		'term': term,
 		'clientid': clientid,
 		'sequence_number': sequence_number
@@ -205,8 +205,8 @@ def test_insert_at(log):
 	assert idx == 1
 
 	# fetch first entry
-	assert log.get(0)['key'] == 100
-	assert log.get(0)['value'] == 1001
+	assert log.get(0)['key'] == [100]
+	assert log.get(0)['value'] == [1001]
 
 	# update fisrt entry
 	sequence_number = sequence_number + 1
@@ -229,7 +229,7 @@ def test_insert_at(log):
 if __name__ == '__main__':
 	logger = Logging('server_1').get_logger()
 
-	db = Database(server_id = 'server_1', logger = logger, type = 'sqlite3')
+	db = Database(server_id = 'server_1', logger = logger, type = 'memory')
 	log = Log('server_1', db, logger)
 
 	if test_normal_functionality(log, db):

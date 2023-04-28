@@ -3,11 +3,8 @@ from threading import Thread
 from queue import Queue
 import time
 import raft.config as config
-
 import shelve
 
-BATCH_SIZE = 200
-FLUSH_TIMEOUT = 10
 
 class MemoryStore:
 
@@ -52,15 +49,6 @@ class MemoryStore:
 		backup_file.close()
 		self.logger.info("Recover done")
 
-	def flush(self, key, value):
-		self.logger.info("Flushing to disk, key: " + str(key) + ", value: " + str(value))
-		
-		backup_file = shelve.open(self.db_backup_file_path, 'c', writeback=True)
-		backup_file[str(key)] = value
-		backup_file.close()
-
-		self.logger.info("Flush done")
-
 	def get(self, key):
 		self.logger.info("Fetching value for key: " + str(key))
 		# error handling for get when key not found
@@ -73,8 +61,8 @@ class MemoryStore:
 		self.logger.info("Updating key: " + str(key) + ", value: " + str(value))
 		for (k, v) in zip(key, value):
 			self.db.update({k: v})
-			# self.flush(k, v)
-			self.apply_queue.put((k, v, index))
+		
+		self.apply_queue.put((key, value, index))
 
 	def get_last_flushed_index(self):
 		return self.last_flushed_ind
@@ -88,9 +76,11 @@ class MemoryStore:
 
 		while True:
 			key, value, index = self.apply_queue.get()
-			backup_file[str(key)] = value
+			for (k, v) in zip(key, value):
+				backup_file[str(k)] = v
+				
 			batch_counter += 1
-			if batch_counter == BATCH_SIZE or time.time() - start_time >= FLUSH_TIMEOUT:
+			if batch_counter == config.FLUSH_APPLIED_BATCH_SIZE or time.time() - start_time >= config.FLUSH_APPLIED_TIMEOUT:
 				backup_file.sync()
 
 				# Update to the last index of the batch that was flushed 
