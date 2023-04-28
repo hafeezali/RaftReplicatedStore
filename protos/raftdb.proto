@@ -64,6 +64,7 @@ message LogEntry {
 	int32 prev_term = 3;
 	int32 prev_log_index = 4;
 	int32 lastCommitIndex = 5;
+	# has to be repeated
 	Entry entry = 6;
 	int32 current_term = 7;
 }

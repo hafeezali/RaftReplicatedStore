@@ -33,8 +33,17 @@ class Server(raftdb_grpc.ClientServicer):
         Thread(target=self.election.run_election_service()).start()
 
         self.consensus = Consensus(peers=peer_list, log=self.log, logger=self.logger)
+        # Create thread to trigger consensus periodically in the background
         self.logger.info("Finished starting server... " + self.server_id)
 
+    # non-nil ext operation. 
+    # Check if key is present in durability log. If present, copy durability log to consensus log and achieve consensus on entire durability log. 
+    # Clear the durability log
+    # Create a map to store if key is present in durability log. This is used for quickly checking key in durability log. Clear map only after groupConsensus
+    # We need lock for groupConsensus only until it is added to consensus log of leader but before replication.
+    # Modify AppendEntries to take multiple entries instead of just one. Modify consensus layer to track last apply
+    # How do we write a durability log -- list.
+    # TODO: We can parallelize multiple get requests by having multiple consensus in parallel
     def Get(self, request, context):
         # Strongly consistent -- if we allow only one outstanding client request, the system must be strongly consistent by default
         self.logger.info("Get request received for key: " + str(request.key))
@@ -49,6 +58,9 @@ class Server(raftdb_grpc.ClientServicer):
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
             return raftdb.GetResponse(code = config.RESPONSE_CODE_REDIRECT, value = None, leaderId = leader_id)
+
+    def groupConsensus(self):
+        pass
 
     def Put(self, request, context):
         self.logger.info("Put request received for key: " + str(request.key) + ", and value: " + str(request.value) + ", from client: " + str(request.clientid))

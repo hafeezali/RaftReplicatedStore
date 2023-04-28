@@ -522,6 +522,7 @@ class Log:
 		self.configs['last_applied_idx'] = idx
 		self.logger.info(f"Resetting applied indext to {idx}")
 		
+
 		with self.lock:
 			self.logger.info(f"Apply_from_index {idx} started")
 			c_idx = self.configs["last_commit_idx"]
@@ -535,3 +536,28 @@ class Log:
 				idx = idx + 1
 
 			self.logger.info(f"Apply_from_index finished, from {start_idx} to {c_idx}")
+
+	def append_to_dura_log(self, entry):
+		pass
+
+	# returns start and last index
+	# modify this with lock only
+	def copy_dura_to_consensus_log(self):
+		pass
+
+	# only called by follower
+	def clear_dura_log(self, keys):
+		pass
+
+	# Only called by leader
+	def clear_dura_log(self, index):
+		pass
+
+	def get_dura_log(self):
+		pass
+
+
+	# flush dura log always 
+	# flush consensus log immediateoy
+	# include dura log index in configs. it needs to be persisted the same way as the other configs
+	# dura log index needs to be updated after clear_dura_log and after append_dura_log after acquiring lock!
