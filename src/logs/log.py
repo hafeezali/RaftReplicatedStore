@@ -218,9 +218,7 @@ class Log:
 			self.configs["last_flushed_idx"] = self.database.get_last_flushed_index()
 			config_file = shelve.open(self.config_path, 'c', writeback=True)
 			with self.lock:
-				for key in self.configs:
-					# self.logger.info("Inside flush config: " + str(key) + ". Persisting config")
-					config_file[key] = self.configs[key]
+				config_file.update(self.configs)
 
 			config_file.close()
 			time.sleep(FLUSH_CONFIG_TIME)
@@ -354,6 +352,8 @@ class Log:
 			
 			self.log[index] = entry
 			self.log[index]['commit_done'] = False
+			self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
+
 
 			self.logger.info("Insert at index done")
 			return index
@@ -497,7 +497,6 @@ class Log:
 	def apply_from_index(self, idx):
 		
 		start_idx = idx
-		print(f"start index: {start_idx}")
 
 		# Resetting last_applied_idx to the last index that was applied and flushed to disk
 		# Any changes that were applied to in mem but not flused are lost on server crash
@@ -509,22 +508,12 @@ class Log:
 			self.logger.info(f"Apply_from_index {idx} started")
 			c_idx = self.configs["last_commit_idx"]
 			idx = self.configs["last_applied_idx"] + 1
-			
-			print(f"last applied index {self.configs['last_applied_idx']}")
-			print(f"last commit index: {c_idx}")
-			print(idx)
 
 			while idx <= c_idx:
-				flush_res = self.flush(idx)
-				if flush_res:
-					entry = self.get(idx)
-					self.logger.info('Applying value: ' + str(entry['value']) + ' to key: ' + str(entry['key']))
-					print(f"entry: {entry}")
-					print(f" Entry key {entry['key']}, value: {entry['value']}, index: {idx}")
-					self.database.put(entry['key'], entry['value'], idx)
-					self.configs["last_applied_idx"] = self.configs["last_applied_idx"] + 1
-				else:
-					break
+				entry = self.get(idx)
+				self.logger.info('Applying value: ' + str(entry['value']) + ' to key: ' + str(entry['key']))
+				self.database.put(entry['key'], entry['value'], idx)
+				self.configs["last_applied_idx"] = self.configs["last_applied_idx"] + 1
 				idx = idx + 1
 
 			self.logger.info(f"Apply_from_index finished, from {start_idx} to {c_idx}")
