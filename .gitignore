@@ -1,2 +1,5 @@
 *.DS_Store
 */__pycache__/*
+src/logs/backup/server_1_config.db
+src/logs/backup/server_1_log.db
+src/logs/store/server_1_mem.db

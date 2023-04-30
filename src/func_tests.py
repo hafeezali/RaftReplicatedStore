@@ -28,7 +28,7 @@ class FunctionalTests:
         self.key_start = key_start
         self.leader_id = 1
 
-# function to test get functionality
+    # function to test get functionality
     def test_get(self):
 
         for i in range(self.num_elements):
@@ -41,10 +41,12 @@ class FunctionalTests:
             expected_output.append(self.values[i])    
             if response[1] != expected_output :
                 print(f"!!!!!!!!!! GET returned a weird value, expected: {expected_output}, actual {response[1]}")
-
+        
+        print("-----------------------------")
         print("Test Get Key Ran Successfully")  
+        print("-----------------------------")
 
-# functionality to test put functionality 
+    # functionality to test put functionality 
     def add_items_to_store(self):
 
         # adding fixed values to keep track
@@ -64,7 +66,9 @@ class FunctionalTests:
                 response = self.client.requestPut(*inputs)
             self.leader_id = response[1]
 
-        print("Put ran successfully")    
+        print("-------------------------")
+        print("Test Put ran successfully")    
+        print("-------------------------")
     
     def get_same_key(self):
         key = []
@@ -78,10 +82,13 @@ class FunctionalTests:
             
             if response[1] != value:
                 print(f"!!!!!!!!!! GET returned a weird value, expected: -999, actual {value}")
-        print("Test Get Same Key Ran Successfully")   
 
-# currently getting stuck in the Is Applied loop because of the last entry not getting marked as committed 
-# Checked functionality after removing start and stop
+        print("----------------------------------")
+        print("Test Get Same Key Ran Successfully")   
+        print("----------------------------------")
+
+    # currently getting stuck in the Is Applied loop because of the last entry not getting marked as committed 
+    # Checked functionality after removing start and stop
     def leader_failure(self) :
         print(f"{self.leader_id} is the leader")
         container_name = 'raftreplicatedstore-' + self.leader_id + '-1'
@@ -94,17 +101,17 @@ class FunctionalTests:
         input = [[100], [1000], self.client_id]
         response = self.client.requestPut(*input)
         if response[0] == False :
-            print("Error in put after the leader fails")
+            print("!!!!!!!!! Error in put after the leader fails !!!!!!!!!")
         else :
             new_leader = response[1]    
         if new_leader == self.leader_id :
-            print("Some problem in leader failure as still old leader is there in the system")
+            print("!!!!!!!!! Some problem in leader failure as still old leader is there in the system !!!!!!!!!")
         else :
             self.leader_id = new_leader    
         input = [[200], [2000], self.client_id]  
         response = self.client.requestPut(*input)
         if response[0] == False :
-            print("Error in put after the leader fails")
+            print("!!!!!!!!! Error in put after the leader fails !!!!!!!!!")
 
         container_name = 'raftreplicatedstore-' + self.leader_id + '-1'
         # previous leader comes back up
@@ -114,22 +121,22 @@ class FunctionalTests:
         input = [[300], [3000], self.client_id]  
         response = self.client.requestPut(*input)
         if response[0] == False :
-            print("Error in put after the previous leader comes back up")
+            print("!!!!!!!!! Error in put after the previous leader comes back up !!!!!!!!!")
         else :
             new_leader = response[1]
 
         if first_leader == new_leader :
-            print("Something wrong in the logic as old leader is becoming the new leader")
+            print("!!!!!!!!! Something wrong in the logic as old leader is becoming the new leader !!!!!!!!!")
 
         self.leader_id = new_leader
         key = [200]
         value = [2000]
         response = self.client.requestGet(key) 
         if response[1] != value  :
-            print("Something wrong")
+            print("!!!!!!!!! Something wrong !!!!!!!!!")
 
 
-# currently creating an error in the follower logs because the last entry is not marked as committed
+    # currently creating an error in the follower logs because the last entry is not marked as committed
     def follower_failure(self) :
         print(f"{self.leader_id} is the leader")
         if self.leader_id == 'server-1':
@@ -150,11 +157,11 @@ class FunctionalTests:
         input = [[100], [1000], self.client_id]
         response = self.client.requestPut(*input)
         if response[0] == False :
-            print("Error in put after the follower fails")
+            print("!!!!!!!!! Error in put after the follower fails !!!!!!!!!")
         input = [[200], [2000], self.client_id]  
         response = self.client.requestPut(*input)
         if response[0] == False :
-            print("Error in put after the follower fails")
+            print("!!!!!!!!! Error in put after the follower fails !!!!!!!!!")
 
         # follower comes back up
         container_name = 'raftreplicatedstore-' + follower + '-1'
@@ -166,19 +173,19 @@ class FunctionalTests:
         input = [[300], [3000], self.client_id]  
         response = self.client.requestPut(*input)
         if response[0] == False :
-            print("Error in put after the previous follower comes back up")
+            print("!!!!!!!!! Error in put after the previous follower comes back up !!!!!!!!!")
         else :
             new_leader = response[1]
 
         if follower == new_leader :
-            print("Something wrong in the logic as follower is becoming the new leader")
+            print("!!!!!!!!! Something wrong in the logic as follower is becoming the new leader !!!!!!!!!")
         else :
             print(f"{self.leader_id} is the leader")
         key = [200]
         value = [2000]
         response = self.client.requestGet(key) 
         if response[1] != value  :
-            print("Something wrong")    
+            print("!!!!!!!!! Something wrong !!!!!!!!!")    
 
 
     def run_tests(self):
