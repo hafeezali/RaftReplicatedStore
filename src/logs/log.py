@@ -353,7 +353,7 @@ class Log:
 			self.log[index] = entry
 			self.log[index]['commit_done'] = False
 
-			if entry['sequence_number'] > self.configs['last_appended_command_per_client']:
+			if entry['sequence_number'] > self.configs['last_appended_command_per_client'][entry['clientid']]:
 				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 
 
