@@ -228,24 +228,6 @@ def test_insert_at(log):
 
 if __name__ == '__main__':
 	logger = Logging('server_1').get_logger()
-
-	db = Database(server_id = 'server_1', logger = logger, type = 'memory')
-	log = Log('server_1', db, logger)
-
-	if test_normal_functionality(log, db):
-		print('normal functionality test passed')
-
-	if test_last_commit_idx(log, db):
-		print('last commit idx test passed')
-
-	db = Database(server_id = 'server_1', logger = logger, type = 'sqlite3')
-	log = Log('server_1', db, logger)
-
-	if test_recovery(log, db):
-		print('test recovery passed')
-
-	if test_insert_at(log):
-		print('insert at test passed')
 	
 	db = Database(server_id = 'server_1', type = 'memory', logger = logger)
 	log = Log('server_1', db, logger)

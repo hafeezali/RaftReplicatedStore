@@ -352,7 +352,9 @@ class Log:
 			
 			self.log[index] = entry
 			self.log[index]['commit_done'] = False
-			self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
+
+			if entry['sequence_number'] > self.configs['last_appended_command_per_client']:
+				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 
 
 			self.logger.info("Insert at index done")
