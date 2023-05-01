@@ -197,9 +197,9 @@ class FunctionalTests:
         time.sleep(1)
         self.test_get()
         time.sleep(1)
-        self.leader_failure()
+        # self.leader_failure()
         time.sleep(1)
-        # self.follower_failure()
+        self.follower_failure()
 
 def start_clients(num_clients, id, key, start_seq_num):
     starting_seq_num = start_seq_num

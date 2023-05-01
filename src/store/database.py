@@ -20,4 +20,4 @@ class Database:
 		self.db.clear_backup()
 
 	def get_last_flushed_index(self):
-		self.db.get_last_flushed_index()
+		return self.db.get_last_flushed_index()
