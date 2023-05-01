@@ -2,7 +2,7 @@ import sys
 
 sys.path.append('../')
 
-from os import path, getenv, makedirs
+from os import path, makedirs
 from threading import Lock, Thread
 
 import time
@@ -27,13 +27,17 @@ Log layer responsible for
 	- voted_for
 	- leader_id
 	- last_appended_command_per_client
+	- last_safe_index
+	- last_safe_index_per_follower
 
 TODO:
-1. All persistent state can be collated into one dict. Easier persistence and recovery (but cant implement finer locks)
+1. [IN_PROGRESS] All persistent state can be collated into one dict. Easier persistence and recovery (but cant implement finer locks)
 2. clear_log_backup() can live inside clear()
-3. Shelve is having some weird behavior when appending the first element to the list - investigate this later (fixed by using a dict instead of list for log)
+3. [DONE] Shelve is having some weird behavior when appending the first element to the list - investigate this later (fixed by using a dict instead of list for log)
 4. We probably want the locks to become more finer for some performance gains
 5. Can ignore committed logs from disk on recover. Can remove committed logs from log dict
+6. [TO_START] last_applied_command_per_client should be updated after every append, but persisted after every apply. We need to store a volatile map called last_appended_command_per_client and recover this from snapshot and replay of logs
+7. [TO_START] Fix the hack: On recovery reset log_idx to size of recovered log
 '''
 
 class Log:
@@ -74,6 +78,16 @@ class Log:
 		}
 		self.configs["leader_id"] = None
 		self.configs["last_appended_command_per_client"] = dict()
+
+		# volatile state
+		# For leader, it is the log_index. For follower, it is the last index inserted/appended by the current leader
+		# On recovery, it is initialized to last_commit_index for follower and leader. 
+		# For leader it should get updated to log_idx and for follower, it should be updated after the 1st RPC
+		self.last_safe_index = -1
+
+		# leader stores the last safe index for each client. 
+		# This will get populated as leader sends append entries to clients and doesn't need to be persisted
+		self.last_safe_index_per_follower = dict()
 		self.configs["last_flushed_idx"] = -1
 
 		# central lock for all configs that can be accessed by multiple threads
@@ -138,8 +152,14 @@ class Log:
 		try:
 			if config_file['last_commit_idx']:
 				self.configs["last_commit_idx"] = config_file['last_commit_idx']
+				self.last_safe_index = config_file['last_commit_idx']
 			if config_file['log_idx']:
 				self.configs["log_idx"] = config_file['log_idx']
+				### HACK!!!! -- this is because log is persisted by a different thread and the configs by a different thread. So they are not in sync. Log gets persisted only after its marked as ready for commit
+				### by the leader perhaps in heartbeats
+				if self.configs["log_idx"] >= len(self.log):
+					self.logger.info("HACK applied on log_idx")
+					self.configs["log_idx"] = len(self.log) - 1
 			if config_file['last_applied_idx']:
 				self.configs["last_applied_idx"] = config_file['last_applied_idx']
 			if config_file['term']:
@@ -196,10 +216,7 @@ class Log:
 
 		try:
 			log_file = shelve.open(self.log_path, 'c', writeback=True)
-			# self.debug_check_log_file(log_file)
-			self.logger.info("Trying to persist: " + str(self.log[index]))
 			log_file[str(index)] = self.log[index]
-			self.logger.info("now im here")
 			log_file.close()
 		except Exception as e:
 			self.logger.info(f'Exception, details: {e}') 
@@ -212,7 +229,6 @@ class Log:
 	If any config has changed, persist that change. Dedicated thread created to achieve this
 	'''
 	def flush_config(self):
-		# self.logger.info("Flush config")
 
 		while True:
 			self.configs["last_flushed_idx"] = self.database.get_last_flushed_index()
@@ -223,39 +239,20 @@ class Log:
 			config_file.close()
 			time.sleep(FLUSH_CONFIG_TIME)
 
-	'''
-	This will only be called by the leader node. This commits log entry at index. Entries can be committed out of order in leader
-	'''
-	def commit(self, index):
-		self.logger.info("Commit for index: " + str(index))
-
-		with self.lock:
-			self.log[index]['commit_done'] = True
-			self.logger.info("Start commit index: " + str(self.configs["last_commit_idx"]))
-			while self.configs["last_commit_idx"] + 1 <= self.configs["log_idx"] and self.log[self.configs["last_commit_idx"]+1]['commit_done'] is True:
-				self.configs["last_commit_idx"] += 1
-			self.logger.info("End commit index: " + str(self.configs["last_commit_idx"]))
-
-		self.logger.info("Commit done")
-
 	def get_log_idx(self):
 		self.logger.info("Get log idx")
-
 		with self.lock:
-			self.logger.info("Got the lock for idx")
 			return self.configs["log_idx"]
 		
 		
 	def get_last_commit_index(self):
 		self.logger.info("Get last commit idx")
 		with self.lock:
-			self.logger.info("Got the lock for commit idx")
 			return self.configs["last_commit_idx"]
 
 	def get_term(self):
 		# self.logger.info("Get term")
 		with self.lock:
-			# self.logger.info("Got the lock for term")
 			return self.configs["term"]
 
 	def update_term(self, term):
@@ -267,7 +264,7 @@ class Log:
 		self.logger.info("Update term done")
 
 	'''
-	This will be called by follower nodes. This marks all logs till index as ready to be committed
+	This marks all logs till index as ready to be committed
 	'''
 	def commit_upto(self, index):
 		self.logger.info("Commit upto index: " + str(index))
@@ -290,7 +287,6 @@ class Log:
 
 		while True:
 			with self.lock:
-				# self.logger.info("Apply started")
 				c_idx = self.configs["last_commit_idx"]
 				idx = self.configs["last_applied_idx"] + 1
 				while idx <= c_idx:
@@ -332,6 +328,7 @@ class Log:
 			self.log[self.configs["log_idx"]]['commit_done'] = False
 
 			self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
+			self.last_safe_index = self.configs["log_idx"]
 
 			self.logger.info("Log size after: " + str(len(self.log)))
 			self.logger.info("Append entry done")
@@ -352,10 +349,11 @@ class Log:
 			
 			self.log[index] = entry
 			self.log[index]['commit_done'] = False
-
-			if entry['sequence_number'] > self.configs['last_appended_command_per_client'][entry['clientid']]:
+			self.last_safe_index = max(self.last_safe_index, index)
+			if entry['clientid'] not in self.configs['last_appended_command_per_client']:
 				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
-
+			elif entry['sequence_number'] > self.configs['last_appended_command_per_client'][entry['clientid']]:
+				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 
 			self.logger.info("Insert at index done")
 			return index
@@ -389,7 +387,6 @@ class Log:
 
 	def get_status(self):
 		# self.logger.info("Get status")
-
 		return self.configs["status"]
 	
 	def set_self_candidate(self):
@@ -412,7 +409,7 @@ class Log:
 		with self.lock:
 			self.configs["status"] = STATE['LEADER']
 			self.configs["leader_id"] = self.server_id
-			self.logger.info(f'leader for term {self.configs["term"]} is meeeee, self serverid {self.server_id}')
+			self.logger.info(f'Leader for term {self.configs["term"]} is me, self serverid {self.server_id}')
 
 		self.logger.info("Set self leader done")
 
@@ -470,10 +467,29 @@ class Log:
 			self.configs["log_idx"] = -1
 			self.configs["last_applied_idx"] = -1
 			self.configs["last_flushed_idx"] = -1
+			self.last_safe_index = -1
 			self.clear_log_backup()
 
 		self.logger.info("clear done")
 	
+	def update_last_safe_index_for(self, follower_id, last_safe_index):
+		self.logger.info("Update last safe index for :" + str(follower_id))
+		with self.lock:
+			self.last_safe_index_per_follower[follower_id] = last_safe_index
+
+	def get_last_safe_index_for(self, follower_id):
+		self.logger.info("Get last safe index for: " + str(follower_id))
+
+		with self.lock:
+			if follower_id in self.last_safe_index_per_follower:
+				return self.last_safe_index_per_follower[follower_id]
+			else:
+				return -1
+
+	def get_last_safe_index(self):
+		self.logger.info("Geting last safe index...")
+		return self.last_safe_index
+
 	def debug_print_log(self):
 		self.logger.info("Debug print log")
 		for key in self.log:
@@ -519,9 +535,3 @@ class Log:
 				idx = idx + 1
 
 			self.logger.info(f"Apply_from_index finished, from {start_idx} to {c_idx}")
-			
-
-
-
-	
-

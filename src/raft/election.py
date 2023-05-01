@@ -1,8 +1,6 @@
 import time
 from threading import Lock, Thread
-from queue import Queue
 import raft.config as config
-import concurrent.futures as futures
 import random
 import grpc
 import protos.raftdb_pb2 as raftdb
@@ -11,10 +9,12 @@ from logs.log import Log
 
 '''
 TODO:
-1. [Done] Still possible that update votes can be called by two concurrent threads when node just became leader by one of the threads. Just adding a status check should fix the issue
-2. [Unable to reproduce] There was some type casting issue in RequestVote around candidate_term and voter_term
-3. [Done] If candidate term > voter term, check logs before sending vote
-4. [Done] If we send a vote, set leader id to None since we are updating our term, will find out leader through heartbeat
+1. [DONE] Still possible that update votes can be called by two concurrent threads when node just became leader by one of the threads. Just adding a status check should fix the issue
+2. [DONE] There was some type casting issue in RequestVote around candidate_term and voter_term
+3. [DONE] If candidate term > voter term, check logs before sending vote
+4. [DONE] If we send a vote, set leader id to None since we are updating our term, will find out leader through heartbeat
+
+5. [TODO] Investigete heartbeat updating follower term issue. -- Leader failover test
 '''
 class Election(raftdb_grpc.RaftElectionService):
 
@@ -135,14 +135,22 @@ class Election(raftdb_grpc.RaftElectionService):
         self.logger.info(f'Sending heartbeat for term {term} to {follower}')
         with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
             stub = raftdb_grpc.RaftElectionServiceStub(channel)
-            request = raftdb.HeartbeatRequest(
-                term = term,
-                serverId = self.serverId
-            )
-            start = time.time()
             
             while self.__log.get_term() == term and self.__log.get_status() == config.STATE['LEADER']:
                 try:
+                    start = time.time()
+                    log_idx = self.__log.get_log_idx()
+                    if log_idx > -1:
+                        log_term = self.__log.get(log_idx)['term']
+                    else:
+                        log_term = -1
+                    request = raftdb.HeartbeatRequest(
+                        term = term,
+                        serverId = self.serverId,
+                        lastCommitIndex = self.__log.get_last_commit_index(),
+                        log_idx = log_idx,
+                        log_term = log_term
+                    )
                     response = stub.Heartbeat(request, timeout=config.RPC_TIMEOUT)
 
                     if response.code != config.RESPONSE_CODE_OK:
@@ -193,6 +201,14 @@ class Election(raftdb_grpc.RaftElectionService):
             self.__log.revert_to_follower(sender_term, sender_serverId)
             # update last time we received heartbeat
             self.last_heartbeat_time = time.time()
+            last_idx = self.__log.get_log_idx()
+            if last_idx > -1:
+                last_term = self.__log.get(last_idx)['term']
+            else:
+                last_term = -1
+            self.logger.info(f'log_term: {request.log_term}, last_term: {last_term}, log_idx: {request.log_idx}, last_idx: {last_idx}')
+            if request.log_term == last_term and request.log_idx == last_idx:
+                self.__log.commit_upto(request.lastCommitIndex)
             return raftdb.HeartbeatResponse(code = config.RESPONSE_CODE_OK,
                                             term = sender_term,
                                             leaderId= self.__log.get_leader())

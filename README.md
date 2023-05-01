@@ -11,7 +11,7 @@ Hafeez Ali Anees Ali, Sunaina Krishnamoorthy, Saanidhi Arora
 python3 -m pip install grpcio
 python3 -m pip install grpcio-tools
 
-## Generating gRPC code:
+## Generating protos:
 
 python3 -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./src/protos --grpc_python_out=./src/protos ./protos/raftdb.proto
 
@@ -22,12 +22,16 @@ python3 -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./sr
 3. Add documentation
 	- lastCommitIndex : gives position in log
 	- termIndex : index for given term
+	- lastSafeIndex : index in follower which was last appended by current leader
+	...
 
 ## TODO:
 
 1. Server needs to handle redirection
 2. Reject/block client request when election in progress
 3. Need to implement a logger layer
+4. Do we need a current_term and term in LogEntry? -- yes
+5. [DONE] Bug in log.py -- last_applied_command_per_client should be updated after every append, but persisted after every apply. We need to store a volatile map called last_appended_command_per_client and recover this from snapshot and replay of logs
 
 Leader
 1. leader has to decide if an entry is committed and apply to its state machine

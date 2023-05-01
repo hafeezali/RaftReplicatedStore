@@ -7,9 +7,6 @@ import time
 peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:50053', 'server-3': 'localhost:50055',
                        'server-4': 'localhost:50057', 'server-5': 'localhost:50059'}
 
-'''
-TODO:
-'''
 class ClientPerf:
 
     def __init__(self):
@@ -130,26 +127,4 @@ class ClientPerf:
                     print(f'Connection to {self.leader_id} failed. Trying the next server, details: {status_code} {e.details()}')
                     self.leader_id = self.get_next_server(self.leader_id)
                     self.increment_sequence_number() 
-                    return self.redirectToLeaderPut(self.leader_id, key, value, clientid)
-                
-
-# if __name__ == '__main__':
-    # print("Staring Interactive Client")
-    # client = ClientPerf()
-    # starting_seq_num = int(input("Enter Starting Sequence Number\n"))
-    # client.set_sequence_number(starting_seq_num)
-        
-    # while True:
-    #     reqType = int(input("Options - Get: 1, Put: 2, Quit: 3\n"))
-    #     if reqType == 1:
-    #         key = int(input("Enter key\n"))
-    #         client.requestGet(key)
-    #     elif reqType == 2:
-    #         inputs = list(map(int, input("\nEnter key, value, clientid [ex: 1 2 3]\n").strip().split()))[:3]
-    #         client.requestPut(*inputs)
-    #     elif reqType == 3:
-    #         print("SEEEE YAAA\n")
-    #         break
-    #     else:
-    #         print("Invalid input\n")
-        
+                    return self.redirectToLeaderPut(self.leader_id, key, value, clientid)        

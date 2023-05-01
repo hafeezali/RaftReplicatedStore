@@ -207,12 +207,23 @@ class ConsensusStub(object):
                 request_serializer=raftdb__pb2.LogEntry.SerializeToString,
                 response_deserializer=raftdb__pb2.LogEntryResponse.FromString,
                 )
+        self.AppendCorrection = channel.unary_unary(
+                '/Consensus/AppendCorrection',
+                request_serializer=raftdb__pb2.CorrectionEntry.SerializeToString,
+                response_deserializer=raftdb__pb2.CorrectionEntryResponse.FromString,
+                )
 
 
 class ConsensusServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def AppendEntries(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AppendCorrection(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -225,6 +236,11 @@ def add_ConsensusServicer_to_server(servicer, server):
                     servicer.AppendEntries,
                     request_deserializer=raftdb__pb2.LogEntry.FromString,
                     response_serializer=raftdb__pb2.LogEntryResponse.SerializeToString,
+            ),
+            'AppendCorrection': grpc.unary_unary_rpc_method_handler(
+                    servicer.AppendCorrection,
+                    request_deserializer=raftdb__pb2.CorrectionEntry.FromString,
+                    response_serializer=raftdb__pb2.CorrectionEntryResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -250,5 +266,22 @@ class Consensus(object):
         return grpc.experimental.unary_unary(request, target, '/Consensus/AppendEntries',
             raftdb__pb2.LogEntry.SerializeToString,
             raftdb__pb2.LogEntryResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def AppendCorrection(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Consensus/AppendCorrection',
+            raftdb__pb2.CorrectionEntry.SerializeToString,
+            raftdb__pb2.CorrectionEntryResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

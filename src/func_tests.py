@@ -91,9 +91,10 @@ class FunctionalTests:
     # Checked functionality after removing start and stop
     def leader_failure(self) :
         print(f"{self.leader_id} is the leader")
-        container_name = 'raftreplicatedstore-' + self.leader_id + '-1'
+        container_name = 'project2-' + self.leader_id + '-1'
         first_leader = self.leader_id
         print("stopping the leader server")
+        time.sleep(10)
         result = subprocess.run(['docker', 'stop', container_name], capture_output=True, text=True)
         print(result)
         # executing the get and put commands 
@@ -113,7 +114,6 @@ class FunctionalTests:
         if response[0] == False :
             print("!!!!!!!!! Error in put after the leader fails !!!!!!!!!")
 
-        container_name = 'raftreplicatedstore-' + self.leader_id + '-1'
         # previous leader comes back up
         result = subprocess.run(['docker', 'start', container_name], capture_output=True, text=True)
         print(result)
@@ -148,7 +148,7 @@ class FunctionalTests:
         if self.leader_id == 'server-3':
             follower = 'server-1'   
 
-        container_name = 'raftreplicatedstore-' + follower + '-1'
+        container_name = 'project2-' + follower + '-1'
         print("stopping the follower server")
         result = subprocess.run(['docker', 'stop', container_name], capture_output=True, text=True)
         print(result)
@@ -164,10 +164,10 @@ class FunctionalTests:
             print("!!!!!!!!! Error in put after the follower fails !!!!!!!!!")
 
         # follower comes back up
-        container_name = 'raftreplicatedstore-' + follower + '-1'
+        container_name = 'project2-' + follower + '-1'
         result = subprocess.run(['docker', 'start', container_name], capture_output=True, text=True)
         print(result)
-        
+        time.sleep(10)
 
         print("Executing put after the follower comes back up")
         input = [[300], [3000], self.client_id]  
@@ -192,9 +192,13 @@ class FunctionalTests:
         # run tests
         print("Running tests")
         self.get_same_key()
+        time.sleep(1)
         self.add_items_to_store()
+        time.sleep(1)
         self.test_get()
+        time.sleep(1)
         # self.leader_failure()
+        time.sleep(1)
         self.follower_failure()
 
 def start_clients(num_clients, id, key, start_seq_num):

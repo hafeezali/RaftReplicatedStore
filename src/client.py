@@ -8,7 +8,7 @@ peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:500
 
 '''
 TODO:
-1. Fine tune CLIENT_SLEEP_TIME 
+1. [TO_START] Fine tune CLIENT_SLEEP_TIME 
 '''
 class Client:
 
@@ -53,13 +53,13 @@ class Client:
             try:
                 response = stub.Get(request, timeout=config.RPC_TIMEOUT)
                 self.leader_id = response.leaderId.replace("'", "")
-                print(self.leader_id)
+                print("Leader_id: " + str(self.leader_id))
                 while response.code == config.RESPONSE_CODE_REDIRECT and (self.leader_id == None or self.leader_id == '' or self.leader_id == 'No leader') :
                     print('Waiting for election to happen')
                     time.sleep(config.CLIENT_SLEEP_TIME)
                     response = stub.Get(request, timeout=config.RPC_TIMEOUT)
                     self.leader_id = response.leaderId.replace("'", "")
-                    
+
                 if response.code == config.RESPONSE_CODE_REDIRECT :
                     response = self.redirectToLeaderGet(response.leaderId.replace("'", ""), key)
 
@@ -72,7 +72,7 @@ class Client:
                             print(f"GET for key: {key[i]} Succeeded, value: {value_list[i]}\n")
                 
                 else:
-                    print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
+                    print("Something went wrong, exiting get method with response code: " + str(response.code) + "\n")
 
             except grpc.RpcError as e:
                 status_code = e.code()
@@ -107,10 +107,10 @@ class Client:
 
                 elif response.code == config.RESPONSE_CODE_REJECT:
                     print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
-						
+
                 else:
                     print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
-						
+
             except grpc.RpcError as e:
                 status_code = e.code()
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:

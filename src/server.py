@@ -13,7 +13,7 @@ from threading import Thread
 
 '''
 TODO:
-1. Look into how max_workers should be fine-tuned? Maybe performance testing might help figure that out?
+1. [TO_START] Look into how max_workers should be fine-tuned? Maybe performance testing might help figure that out?
 2. What happens when we dont get majority when trying a put? We need to retry
 3. There might be some inconsistency at the db level here - Puts are happening from log, whereas gets are happening here. Do SELECT and INSERT/UPDATE overlap in sqlite3? 
     Hopefully latching is implemented for in-mem dict by default...

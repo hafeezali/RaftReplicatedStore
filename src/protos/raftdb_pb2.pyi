@@ -5,6 +5,41 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class CorrectionEntry(_message.Message):
+    __slots__ = ["current_term", "entries", "lastCommitIndex"]
+    class Correction(_message.Message):
+        __slots__ = ["clientid", "key", "logIndex", "sequence_number", "term", "value"]
+        CLIENTID_FIELD_NUMBER: _ClassVar[int]
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        LOGINDEX_FIELD_NUMBER: _ClassVar[int]
+        SEQUENCE_NUMBER_FIELD_NUMBER: _ClassVar[int]
+        TERM_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        clientid: int
+        key: _containers.RepeatedScalarFieldContainer[int]
+        logIndex: int
+        sequence_number: int
+        term: int
+        value: _containers.RepeatedScalarFieldContainer[int]
+        def __init__(self, key: _Optional[_Iterable[int]] = ..., value: _Optional[_Iterable[int]] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ..., term: _Optional[int] = ..., logIndex: _Optional[int] = ...) -> None: ...
+    CURRENT_TERM_FIELD_NUMBER: _ClassVar[int]
+    ENTRIES_FIELD_NUMBER: _ClassVar[int]
+    LASTCOMMITINDEX_FIELD_NUMBER: _ClassVar[int]
+    current_term: int
+    entries: _containers.RepeatedCompositeFieldContainer[CorrectionEntry.Correction]
+    lastCommitIndex: int
+    def __init__(self, entries: _Optional[_Iterable[_Union[CorrectionEntry.Correction, _Mapping]]] = ..., lastCommitIndex: _Optional[int] = ..., current_term: _Optional[int] = ...) -> None: ...
+
+class CorrectionEntryResponse(_message.Message):
+    __slots__ = ["code", "lastSafeIndex", "term"]
+    CODE_FIELD_NUMBER: _ClassVar[int]
+    LASTSAFEINDEX_FIELD_NUMBER: _ClassVar[int]
+    TERM_FIELD_NUMBER: _ClassVar[int]
+    code: int
+    lastSafeIndex: int
+    term: int
+    def __init__(self, code: _Optional[int] = ..., term: _Optional[int] = ..., lastSafeIndex: _Optional[int] = ...) -> None: ...
+
 class GetRequest(_message.Message):
     __slots__ = ["key"]
     KEY_FIELD_NUMBER: _ClassVar[int]
@@ -22,12 +57,18 @@ class GetResponse(_message.Message):
     def __init__(self, code: _Optional[int] = ..., value: _Optional[_Iterable[int]] = ..., leaderId: _Optional[str] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
-    __slots__ = ["serverId", "term"]
+    __slots__ = ["lastCommitIndex", "log_idx", "log_term", "serverId", "term"]
+    LASTCOMMITINDEX_FIELD_NUMBER: _ClassVar[int]
+    LOG_IDX_FIELD_NUMBER: _ClassVar[int]
+    LOG_TERM_FIELD_NUMBER: _ClassVar[int]
     SERVERID_FIELD_NUMBER: _ClassVar[int]
     TERM_FIELD_NUMBER: _ClassVar[int]
+    lastCommitIndex: int
+    log_idx: int
+    log_term: int
     serverId: str
     term: int
-    def __init__(self, term: _Optional[int] = ..., serverId: _Optional[str] = ...) -> None: ...
+    def __init__(self, term: _Optional[int] = ..., serverId: _Optional[str] = ..., lastCommitIndex: _Optional[int] = ..., log_idx: _Optional[int] = ..., log_term: _Optional[int] = ...) -> None: ...
 
 class HeartbeatResponse(_message.Message):
     __slots__ = ["code", "leaderId", "term"]
@@ -69,12 +110,14 @@ class LogEntry(_message.Message):
     def __init__(self, term: _Optional[int] = ..., logIndex: _Optional[int] = ..., prev_term: _Optional[int] = ..., prev_log_index: _Optional[int] = ..., lastCommitIndex: _Optional[int] = ..., entry: _Optional[_Union[LogEntry.Entry, _Mapping]] = ..., current_term: _Optional[int] = ...) -> None: ...
 
 class LogEntryResponse(_message.Message):
-    __slots__ = ["code", "term"]
+    __slots__ = ["code", "lastSafeIndex", "term"]
     CODE_FIELD_NUMBER: _ClassVar[int]
+    LASTSAFEINDEX_FIELD_NUMBER: _ClassVar[int]
     TERM_FIELD_NUMBER: _ClassVar[int]
     code: int
+    lastSafeIndex: int
     term: int
-    def __init__(self, code: _Optional[int] = ..., term: _Optional[int] = ...) -> None: ...
+    def __init__(self, code: _Optional[int] = ..., term: _Optional[int] = ..., lastSafeIndex: _Optional[int] = ...) -> None: ...
 
 class PutRequest(_message.Message):
     __slots__ = ["clientid", "key", "sequence_number", "value"]
