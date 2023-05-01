@@ -135,22 +135,22 @@ class Election(raftdb_grpc.RaftElectionService):
         self.logger.info(f'Sending heartbeat for term {term} to {follower}')
         with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
             stub = raftdb_grpc.RaftElectionServiceStub(channel)
-            log_idx = self.__log.get_log_idx()
-            if log_idx > -1:
-                log_term = self.__log.get(log_idx)['term']
-            else:
-                log_term = -1
-            request = raftdb.HeartbeatRequest(
-                term = term,
-                serverId = self.serverId,
-                lastCommitIndex = self.__log.get_last_commit_index(),
-                log_idx = log_idx,
-                log_term = log_term
-            )
-            start = time.time()
             
             while self.__log.get_term() == term and self.__log.get_status() == config.STATE['LEADER']:
                 try:
+                    start = time.time()
+                    log_idx = self.__log.get_log_idx()
+                    if log_idx > -1:
+                        log_term = self.__log.get(log_idx)['term']
+                    else:
+                        log_term = -1
+                    request = raftdb.HeartbeatRequest(
+                        term = term,
+                        serverId = self.serverId,
+                        lastCommitIndex = self.__log.get_last_commit_index(),
+                        log_idx = log_idx,
+                        log_term = log_term
+                    )
                     response = stub.Heartbeat(request, timeout=config.RPC_TIMEOUT)
 
                     if response.code != config.RESPONSE_CODE_OK:
