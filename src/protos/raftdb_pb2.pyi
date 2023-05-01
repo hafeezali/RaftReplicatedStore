@@ -16,12 +16,12 @@ class CorrectionEntry(_message.Message):
         TERM_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         clientid: int
-        key: int
+        key: _containers.RepeatedScalarFieldContainer[int]
         logIndex: int
         sequence_number: int
         term: int
-        value: int
-        def __init__(self, key: _Optional[int] = ..., value: _Optional[int] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ..., term: _Optional[int] = ..., logIndex: _Optional[int] = ...) -> None: ...
+        value: _containers.RepeatedScalarFieldContainer[int]
+        def __init__(self, key: _Optional[_Iterable[int]] = ..., value: _Optional[_Iterable[int]] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ..., term: _Optional[int] = ..., logIndex: _Optional[int] = ...) -> None: ...
     CURRENT_TERM_FIELD_NUMBER: _ClassVar[int]
     ENTRIES_FIELD_NUMBER: _ClassVar[int]
     LASTCOMMITINDEX_FIELD_NUMBER: _ClassVar[int]

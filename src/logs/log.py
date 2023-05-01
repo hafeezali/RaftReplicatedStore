@@ -37,6 +37,7 @@ TODO:
 4. We probably want the locks to become more finer for some performance gains
 5. Can ignore committed logs from disk on recover. Can remove committed logs from log dict
 6. [TO_START] last_applied_command_per_client should be updated after every append, but persisted after every apply. We need to store a volatile map called last_appended_command_per_client and recover this from snapshot and replay of logs
+7. [TO_START] Fix the hack: On recovery reset log_idx to size of recovered log
 '''
 
 class Log:
@@ -154,6 +155,11 @@ class Log:
 				self.last_safe_index = config_file['last_commit_idx']
 			if config_file['log_idx']:
 				self.configs["log_idx"] = config_file['log_idx']
+				### HACK!!!! -- this is because log is persisted by a different thread and the configs by a different thread. So they are not in sync. Log gets persisted only after its marked as ready for commit
+				### by the leader perhaps in heartbeats
+				if self.configs["log_idx"] >= len(self.log):
+					self.logger.info("HACK applied on log_idx")
+					self.configs["log_idx"] = len(self.log) - 1
 			if config_file['last_applied_idx']:
 				self.configs["last_applied_idx"] = config_file['last_applied_idx']
 			if config_file['term']:
@@ -322,7 +328,7 @@ class Log:
 			self.log[self.configs["log_idx"]]['commit_done'] = False
 
 			self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
-			self.last_safe_index = self.log_idx
+			self.last_safe_index = self.configs["log_idx"]
 
 			self.logger.info("Log size after: " + str(len(self.log)))
 			self.logger.info("Append entry done")
@@ -344,9 +350,10 @@ class Log:
 			self.log[index] = entry
 			self.log[index]['commit_done'] = False
 			self.last_safe_index = max(self.last_safe_index, index)
-			if entry['sequence_number'] > self.configs['last_appended_command_per_client'][entry['clientid']]:
+			if entry['clientid'] not in self.configs['last_appended_command_per_client']:
 				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
-
+			elif entry['sequence_number'] > self.configs['last_appended_command_per_client'][entry['clientid']]:
+				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 
 			self.logger.info("Insert at index done")
 			return index
@@ -379,7 +386,7 @@ class Log:
 		self.logger.info("Update status done")
 
 	def get_status(self):
-		self.logger.info("Get status")
+		# self.logger.info("Get status")
 		return self.configs["status"]
 	
 	def set_self_candidate(self):
@@ -528,9 +535,3 @@ class Log:
 				idx = idx + 1
 
 			self.logger.info(f"Apply_from_index finished, from {start_idx} to {c_idx}")
-			
-
-
-
-	
-

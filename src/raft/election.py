@@ -134,7 +134,10 @@ class Election(raftdb_grpc.RaftElectionService):
         with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
             stub = raftdb_grpc.RaftElectionServiceStub(channel)
             log_idx = self.__log.get_log_idx()
-            log_term = self.__log.get(log_idx)['term']
+            if log_idx > -1:
+                log_term = self.__log.get(log_idx)['term']
+            else:
+                log_term = -1
             request = raftdb.HeartbeatRequest(
                 term = term,
                 serverId = self.serverId,
@@ -197,7 +200,11 @@ class Election(raftdb_grpc.RaftElectionService):
             # update last time we received heartbeat
             self.last_heartbeat_time = time.time()
             last_idx = self.__log.get_log_idx()
-            last_term = self.__log.get(last_idx)['term']
+            if last_idx > -1:
+                last_term = self.__log.get(last_idx)['term']
+            else:
+                last_term = -1
+            self.logger.info(f'log_term: {request.log_term}, last_term: {last_term}, log_idx: {request.log_idx}, last_idx: {last_idx}')
             if request.log_term == last_term and request.log_idx == last_idx:
                 self.__log.commit_upto(request.lastCommitIndex)
             return raftdb.HeartbeatResponse(code = config.RESPONSE_CODE_OK,

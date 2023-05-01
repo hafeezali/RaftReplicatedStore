@@ -93,61 +93,64 @@ class Consensus(raftdb_grpc.ConsensusServicer):
 
     def create_log_entry_request(self, index):
         self.logger.debug("Creating log entry request for index: " + str(index))
+        try:
+            prev_term = -1
+            prev_log_index = index - 1
+            if prev_log_index != -1:
+                prev_term = self.__log.get(prev_log_index)['term']
+            
+            current_term = self.__log.get_term()
+            lastCommitIndex = self.__log.get_last_commit_index()
+            log_entry = self.__log.get(index)
 
-        prev_term = -1
-        prev_log_index = index - 1
-        if prev_log_index != -1:
-            prev_term = self.__log.get(prev_log_index)['term']
-        
-        current_term = self.__log.get_term()
-        lastCommitIndex = self.__log.get_last_commit_index()
-        log_entry = self.__log.get(index)
-
-        raft_entry = raftdb.LogEntry.Entry(
-            key = log_entry['key'],
-            value = log_entry['value'],
-            clientid = log_entry['clientid'],
-            sequence_number = log_entry['sequence_number'])
-
-        request = raftdb.LogEntry(
-            term = log_entry['term'],
-            logIndex = index,
-            entry = raft_entry,
-	        prev_term = prev_term,
-            prev_log_index = prev_log_index,
-            lastCommitIndex = lastCommitIndex,
-            current_term = current_term,
-            isCorrection = False)
-
-        return request
-    
-    def create_corrective_log_entries(self, from_index, to_index):
-        self.logger.debug("Creating corrective log entries for indices from " + str(from_index) + " to " + str(to_index))
-
-        entries = list()
-        for idx in range(from_index, to_index+1, 1):
-            log_entry = self.__log.get(idx)
-
-            correction_entry = raftdb.CorrectionEntry.Correction(
+            raft_entry = raftdb.LogEntry.Entry(
                 key = log_entry['key'],
                 value = log_entry['value'],
                 clientid = log_entry['clientid'],
-                sequence_number = log_entry['sequence_number'],
+                sequence_number = log_entry['sequence_number'])
+
+            request = raftdb.LogEntry(
                 term = log_entry['term'],
-                logIndex = idx)
+                logIndex = index,
+                entry = raft_entry,
+                prev_term = prev_term,
+                prev_log_index = prev_log_index,
+                lastCommitIndex = lastCommitIndex,
+                current_term = current_term)
             
-            entries.append(correction_entry)
-        
-        current_term = self.__log.get_term()
-        lastCommitIndex = self.__log.get_last_commit_index()
-
-        request = raftdb.CorrectionEntry(
-            entries = entries,
-            lastCommitIndex = lastCommitIndex,
-            current_term = current_term
-        )
-
-        return request
+            return request
+        except Exception as e:
+            self.logger.debug(f'Exception, details: {e}')
+    
+    def create_corrective_log_entries(self, from_index, to_index):
+        self.logger.debug("Creating corrective log entries for indices from " + str(from_index) + " to " + str(to_index))
+        try:
+            entries = list()
+            for idx in range(from_index, to_index+1, 1):
+                
+                log_entry = self.__log.get(idx)
+                correction_entry = raftdb.CorrectionEntry.Correction(
+                    key = log_entry['key'],
+                    value = log_entry['value'],
+                    clientid = log_entry['clientid'],
+                    sequence_number = log_entry['sequence_number'],
+                    term = log_entry['term'],
+                    logIndex = idx)
+                
+                entries.append(correction_entry)
+            
+            current_term = self.__log.get_term()
+            lastCommitIndex = self.__log.get_last_commit_index()
+            self.logger.debug("1. Creating corrective log entries for indices from " + str(from_index) + " to " + str(to_index))
+            request = raftdb.CorrectionEntry(
+                entries = entries,
+                lastCommitIndex = lastCommitIndex,
+                current_term = current_term
+            )
+            self.logger.debug("2. Creating corrective log entries for indices from " + str(from_index) + " to " + str(to_index))
+            return request
+        except Exception as e:
+            self.logger.debug(f'Exception, details: {e}')
 
     def broadcastEntry(self, follower : str, entry, log_index_to_commit):
         with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
@@ -163,12 +166,15 @@ class Consensus(raftdb_grpc.ConsensusServicer):
                 # case where follower's log doesn't match leader's log and requries correction
                 if response.code != config.RESPONSE_CODE_OK and response.code != config.RESPONSE_CODE_REDIRECT:
                     self.logger.info('There is a log mismatch. Will send entries from last safe index of follower log. log_index_to_commit: ' + str(log_index_to_commit))
+                    self.__log.update_last_safe_index_for(follower, response.lastSafeIndex)
                     from_index = self.__log.get_last_safe_index_for(follower)
-                    request = self.create_corrective_log_entries(from_index, log_index_to_commit)
+                    # from_index + 1 because from_index has already been safely added in client
+                    request = self.create_corrective_log_entries(from_index+1, log_index_to_commit)
                     response = self.AppendCorrection(request)
 
                 if response.code == config.RESPONSE_CODE_REDIRECT:
                     self.logger.debug('There is a server with larger term, updating term and status')
+                    self.__log.update_last_safe_index_for(follower, response.lastSafeIndex)
                     self.__log.update_term(response.term)
                     self.__log.update_status(config.STATE['FOLLOWER'])
                 # only adding to majority if the node has correctly appended it's log

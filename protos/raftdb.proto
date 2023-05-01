@@ -76,8 +76,8 @@ message LogEntryResponse {
 
 message CorrectionEntry {
 	message Correction {
-		int32 key = 1;
-		int32 value = 2;
+		repeated int32 key = 1;
+		repeated int32 value = 2;
 		int32 clientid = 3;
 		int32 sequence_number = 4;
 		int32 term = 5;

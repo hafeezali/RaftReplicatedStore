@@ -1,6 +1,5 @@
 from store.memorydatabase.mem_store import MemoryStore
 
-
 '''
 TODO:
 1. [IN_PROGRESS] Get should be surrounded by try catch statements. Throw a key error if key is missing
@@ -10,7 +9,6 @@ class Database:
 
 	def __init__(self, server_id, logger, type = 'memory'):
 		self.db = MemoryStore(server_id, logger)
-		self.lock = Lock()
 		
 	def get(self, key):
 		return self.db.get(key)
