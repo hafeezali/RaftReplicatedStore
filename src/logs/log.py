@@ -343,7 +343,7 @@ class Log:
 			
 			self.log[index] = entry
 			self.log[index]['commit_done'] = False
-			self.last_safe_index = min(self.last_safe_index, self.log_idx)
+			self.last_safe_index = max(self.last_safe_index, index)
 			if entry['sequence_number'] > self.configs['last_appended_command_per_client'][entry['clientid']]:
 				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 
