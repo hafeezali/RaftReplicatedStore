@@ -30,8 +30,8 @@ python3 -m grpc_tools.protoc -I./protos --python_out=./src/protos --pyi_out=./sr
 1. Server needs to handle redirection
 2. Reject/block client request when election in progress
 3. Need to implement a logger layer
-4. Do we need a current_term and term in LogEntry?
-5. Bug in log.py -- last_applied_command_per_client should be updated after every append, but persisted after every apply. We need to store a volatile map called last_appended_command_per_client and recover this from snapshot and replay of logs
+4. Do we need a current_term and term in LogEntry? -- yes
+5. [DONE] Bug in log.py -- last_applied_command_per_client should be updated after every append, but persisted after every apply. We need to store a volatile map called last_appended_command_per_client and recover this from snapshot and replay of logs
 
 Leader
 1. leader has to decide if an entry is committed and apply to its state machine

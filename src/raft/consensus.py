@@ -170,7 +170,7 @@ class Consensus(raftdb_grpc.ConsensusServicer):
                     from_index = self.__log.get_last_safe_index_for(follower)
                     # from_index + 1 because from_index has already been safely added in client
                     request = self.create_corrective_log_entries(from_index+1, log_index_to_commit)
-                    response = self.AppendCorrection(request)
+                    response = stub.AppendCorrection(request)
 
                 if response.code == config.RESPONSE_CODE_REDIRECT:
                     self.logger.debug('There is a server with larger term, updating term and status')

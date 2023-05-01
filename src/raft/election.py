@@ -13,6 +13,8 @@ TODO:
 2. [DONE] There was some type casting issue in RequestVote around candidate_term and voter_term
 3. [DONE] If candidate term > voter term, check logs before sending vote
 4. [DONE] If we send a vote, set leader id to None since we are updating our term, will find out leader through heartbeat
+
+5. [TODO] Investigete heartbeat updating follower term issue. -- Leader failover test
 '''
 class Election(raftdb_grpc.RaftElectionService):
 
