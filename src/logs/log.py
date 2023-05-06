@@ -63,6 +63,10 @@ class Log:
 		self.check_backup_dir()
 
 		self.log = dict()
+		self.durability_log = list()
+		self.durability_log_entry_set = set()
+		self.durability_log_mapper = dict()
+		self.durability_lock = Lock()
 
 		# persistent state
 
@@ -253,7 +257,8 @@ class Log:
 	def get_term(self):
 		# self.logger.info("Get term")
 		with self.lock:
-			return self.configs["term"]
+			# self.logger.info("Got the lock for term")
+			return self.term
 
 	def update_term(self, term):
 		self.logger.info("Update term to: " + str(term))
@@ -344,16 +349,12 @@ class Log:
 				self.configs["log_idx"] += 1
 			elif index > self.configs["log_idx"] + 1:
 				self.logger.error("index > log_idx + 1 -- must not be possible")
-				self.logger.info("Error: Insert at index not done")
+				self.logger.info("Insert at index done")
 				return -1
-			
 			self.log[index] = entry
 			self.log[index]['commit_done'] = False
-			self.last_safe_index = max(self.last_safe_index, index)
-			if entry['clientid'] not in self.configs['last_appended_command_per_client']:
-				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
-			elif entry['sequence_number'] > self.configs['last_appended_command_per_client'][entry['clientid']]:
-				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
+
+			self.config_change['log_idx'] = True
 
 			self.logger.info("Insert at index done")
 			return index
@@ -367,7 +368,7 @@ class Log:
 		self.logger.info("Get leader")
 
 		with self.lock:
-			return self.configs["leader_id"]
+			return self.leader_id
 
 	def update_leader(self, leader):
 		self.logger.info("Update leader to: " + leader)
@@ -534,28 +535,109 @@ class Log:
 				self.database.put(entry['key'], entry['value'], idx)
 				self.configs["last_applied_idx"] = self.configs["last_applied_idx"] + 1
 				idx = idx + 1
+				
 
 			self.logger.info(f"Apply_from_index finished, from {start_idx} to {c_idx}")
 
+			
+
+	'''
+	- entry added to durability log list
+	- client id, sequence number - key added to entry set - duplicate requests
+	- also, add the entry.key in the log_mapper - map to identify if the entry has got the consensus or not
+	'''
 	def append_to_dura_log(self, entry):
-		pass
+		self.logger.info(f"Appending entry : {entry} to the durability log")
+		with self.durability_lock :
+			self.durability_log.append(entry)
+			key = (entry.clientid, entry.sequence_number)
+			self.durability_log_entry_set.add(key)
+			if entry.key in self.durability_log_mapper :
+				self.durability_log_mapper[entry.key] += 1
+			else :
+				self.durability_log_mapper[entry.key] = 1	
+		
+		self.logger.info(f"Appended entry : {entry} to the durability log successfully")
+
 
 	# returns start and last index
 	# modify this with lock only
+	# created a durability lock, separate from the consensus lock
 	def copy_dura_to_consensus_log(self):
-		pass
+		with self.durability_lock :
+			# the start index of the consensus logs from where I will append these entries is the length
+			start_index = len(self.log)
+			for entry in self.durability_log :
+				self.append({'key' : entry.key,
+                            'value' : entry.value,
+                            'term' : self.get_term(),
+                            'clientid': entry.clientid,
+                            'sequence_number' : entry.sequence_number})
+			last_index = len(self.log) - 1
+
+		return start_index, last_index
 
 	# only called by follower
-	def clear_dura_log(self, keys):
-		pass
+	def clear_dura_log_mapper(self, key):
+		if key in self.durability_log_mapper :
+			value = self.durability_log_mapper[key]
+			if value == 1:
+				self.durability_log_mapper.pop(key)
+			else :
+				self.durability_log_mapper[key] = value - 1
+		else :
+			print("Not there in the mapper")
 
 	# Only called by leader
-	def clear_dura_log(self, index):
-		pass
+	'''
+	Remove entries directly till an index
+	'''
+	def clear_dura_log_leader(self, index):
+		with self.durability_lock :
+			for idx in range(0, index+1, 1) :
+				entry = self.durability_log[idx]
+				self.clear_dura_log_mapper((entry.key, entry.value))
 
+			self.durability_log = self.durability_log[index+1:]
+
+
+
+	'''
+	So, for all the entries in the request, just check in your durability log, if that exists -> then remove it, warna leave it
+	'''
+	def clear_dura_log_follower(self, entries):
+		with self.durability_lock :
+			
+			for entry in entries :
+				# starting from back to avoid index changes
+				last_idx_dura = len(self.durability_log) - 1
+				for idx_dura in range(last_idx_dura, 0, -1) :
+					if self.durability_log[idx_dura] == entry :
+						del self.durability_log[idx_dura]
+						self.clear_dura_log_mapper((entry.key, entry.value))
+
+		return 'OK'
+
+
+				
+	def get_dura_log_map(self, key) :
+		if key in self.durability_log_mapper :
+			return 1
+		else :
+			return -1
 	def get_dura_log(self):
 		pass
 
+	'''
+		This function is to check for a duplicate put request
+		Durability log entry set has client id, sequence number as the key
+	'''
+	def get_dura_log_entry(self, key) :
+		self.logger.info(f"Getting key {key} from the entry set to identify duplicate request")
+		if key in self.durability_log_entry_set :
+			return 1
+		else : 
+			return -1		
 
 	# flush dura log always 
 	# flush consensus log immediateoy

@@ -4,7 +4,8 @@ import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
 from logs.log import Log
 import raft.config as config 
-from threading import Lock
+from threading import Lock, Thread
+import concurrent
 import time
 
 '''
@@ -35,39 +36,39 @@ class Consensus(raftdb_grpc.ConsensusServicer):
         self.ready_to_commit = dict()
         self.logger = logger
 
-    def handlePut(self, entry):
-        self.logger.debug(f'Handling put request for client id - {entry.clientid} and sequence number - {entry.sequence_number}')
-
-        # case where the leader fails, checks if log entry already appended to the state machine
-        last_appended_seq = self.__log.get_last_appended_sequence_for(entry.clientid)
-
-        if last_appended_seq >= entry.sequence_number:
-            self.logger.debug(f'This request for client id - {entry.clientid} and sequence number - {entry.sequence_number} has already been appended to consensus log.')
+    def handlePut(self,entry):
+        self.logger.debug(f'Handling the put request for client id - {entry.clientid} and sequence number - {entry.sequence_number}')
+        
+        # duplicate request
+        if self.__log.get_dura_log_entry((entry.clientid, entry.sequence_number))== 1:
             return 'OK'
 
-        # initialize counter and commit_done to check majority and commit
-        key = (entry.clientid, entry.sequence_number)
+        # append entry to durability log
+        self.__log.append_to_dura_log(entry)   
+        return 'OK'
+        
+    
+    '''
+    This method is called to start the consensus on particular values of the consensus log
+    '''
+    def start_consensus(self, start_idx, last_idx) :
+        # to keep track of the RPCs which are sent to correct the consenus logs of the follower servers
+        key = (start_idx, last_idx)
         with self.lock :
             self.counter[key] = 0
             self.majority_counter[key] = 0
             self.ready_to_commit[key] = 0
 
-        self.logger.debug(f'Appending the entry to log of {self.__log.server_id}')
-        log_index_to_commit = self.__log.append({'key' : entry.key,
-                            'value' : entry.value,
-                            'term' : self.__log.get_term(),
-                            'clientid': entry.clientid,
-                            'sequence_number' : entry.sequence_number})
-
+#  using similar code here as the broadcasting entries, except sending multiple entries here
         self.logger.debug('Broadcasting append entries...')
         with concurrent.futures.ThreadPoolExecutor() as executor:
             responses = []
             for follower in self.__peers:
                 responses.append(
-                    executor.submit(self.broadcastEntry, follower = follower, entry = entry, log_index_to_commit = log_index_to_commit)
+                    executor.submit(self.broadcastEntry, follower = follower, start_idx = start_idx, last_idx = last_idx,  log_index_to_commit = start_idx)
                 )              
         
-        self.logger.debug("Waiting for responses from followers for key: " + str(entry.key) + ", value: " + str(entry.value)) 
+        self.logger.debug("Waiting for responses from followers for : ") 
         while self.ready_to_commit[key]!= 1 and self.__log.get_status() == config.STATE['LEADER']:
             time.sleep(config.SERVER_SLEEP_TIME)
 
@@ -75,11 +76,21 @@ class Consensus(raftdb_grpc.ConsensusServicer):
         if self.__log.get_status() == config.STATE['LEADER'] and self.ready_to_commit[key] == 1: 
             self.ready_to_commit.pop(key)
 
-            self.logger.debug(f'Committing the entry {entry}')
-            self.__log.commit_upto(log_index_to_commit)
+            self.logger.debug(f'Committing the entry')
+            # so consensus log needs to commit upto the last index
+            self.__log.commit_upto(last_idx)
+            # clean up the durability of the leader till the last index -> kyunki start se till end index we have already pushed to the consenus log, should not keep track of the start index kyunki it will always be 0.
+            self.__log.clear_dura_log_leader(last_idx)
+            # now we need to clean the durability logs of the followers as well, this is an
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                follower_responses = []
+                for follower in self.__peers:
+                    follower_responses.append(
+                    executor.submit(self.clearDurabilityLog, follower = follower, start_idx = start_idx, last_idx = last_idx)
+                )  
 
-            self.logger.info("Waiting for log to apply entry for key: " + str(entry.key))
-            while not self.__log.is_applied(log_index_to_commit) :
+            self.logger.info("Waiting for log to apply entry for key: ")
+            while not self.__log.is_applied(last_idx) :
                 time.sleep(config.SERVER_SLEEP_TIME)
             return 'OK'
 
@@ -91,28 +102,33 @@ class Consensus(raftdb_grpc.ConsensusServicer):
         # normal code execution, must not reach this point
         return 'EXCEPTION'
 
-    def create_log_entry_request(self, index):
-        self.logger.debug("Creating log entry request for index: " + str(index))
+    def create_log_entry_request(self, start_index, last_index):
+        self.logger.debug("Creating log entry request for index: ")
         try:
             prev_term = -1
-            prev_log_index = index - 1
+            prev_log_index = start_index - 1
             if prev_log_index != -1:
                 prev_term = self.__log.get(prev_log_index)['term']
             
             current_term = self.__log.get_term()
             lastCommitIndex = self.__log.get_last_commit_index()
-            log_entry = self.__log.get(index)
 
-            raft_entry = raftdb.LogEntry.Entry(
-                key = log_entry['key'],
-                value = log_entry['value'],
-                clientid = log_entry['clientid'],
-                sequence_number = log_entry['sequence_number'])
-
+            entries = list()
+            for idx in range(start_index, last_index+1, 1):
+                
+                log_entry = self.__log.get(idx)
+                entry = raftdb.LogEntry.Entry(
+                    key = log_entry['key'],
+                    value = log_entry['value'],
+                    clientid = log_entry['clientid'],
+                    sequence_number = log_entry['sequence_number'],
+                    term = log_entry['term'],
+                    logIndex = idx)
+                
+                entries.append(entry)
+            
             request = raftdb.LogEntry(
-                term = log_entry['term'],
-                logIndex = index,
-                entry = raft_entry,
+                entry = entries,
                 prev_term = prev_term,
                 prev_log_index = prev_log_index,
                 lastCommitIndex = lastCommitIndex,
@@ -152,12 +168,12 @@ class Consensus(raftdb_grpc.ConsensusServicer):
         except Exception as e:
             self.logger.debug(f'Exception, details: {e}')
 
-    def broadcastEntry(self, follower : str, entry, log_index_to_commit):
+    def broadcastEntry(self, follower : str, start_idx, last_idx, log_index_to_commit):
         with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
             self.logger.debug(f'Broadcasting append entry to {follower}')
 
             stub = raftdb_grpc.ConsensusStub(channel)
-            request = self.create_log_entry_request(log_index_to_commit)
+            request = self.create_log_entry_request(start_idx, last_idx)
 
             try:
                 response = stub.AppendEntries(request)
@@ -169,7 +185,7 @@ class Consensus(raftdb_grpc.ConsensusServicer):
                     self.__log.update_last_safe_index_for(follower, response.lastSafeIndex)
                     from_index = self.__log.get_last_safe_index_for(follower)
                     # from_index + 1 because from_index has already been safely added in client
-                    request = self.create_corrective_log_entries(from_index+1, log_index_to_commit)
+                    request = self.create_corrective_log_entries(from_index+1, last_idx)
                     response = stub.AppendCorrection(request)
 
                 if response.code == config.RESPONSE_CODE_REDIRECT:
@@ -179,10 +195,10 @@ class Consensus(raftdb_grpc.ConsensusServicer):
                     self.__log.update_status(config.STATE['FOLLOWER'])
                 # only adding to majority if the node has correctly appended it's log
                 elif response.code == config.RESPONSE_CODE_OK:
-                    key = (entry.clientid, entry.sequence_number)
+                    key = (start_idx, last_idx)
                     majority = (len(self.__peers))/2
                     with self.lock :
-                        self.logger.debug('Log appended for key: ' + str(entry.key) + 'adding to majority')
+                        self.logger.debug('Log appended for key: '  + 'adding to majority')
                         self.majority_counter[key] += 1
                         if self.majority_counter[key] >= majority and key in self.ready_to_commit:
                             self.ready_to_commit[key] = 1
@@ -195,19 +211,51 @@ class Consensus(raftdb_grpc.ConsensusServicer):
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                     self.logger.debug(f'Request vote failed with timeout error, peer: {follower}, {status_code} details: {e.details()}')
                     # allowing to retry infinitely as of now
-                    self.broadcastEntry(follower, entry, log_index_to_commit)
+                    self.broadcastEntry(follower,start_idx, last_idx, log_index_to_commit)
                 else :
                     self.logger.debug(f'Some other error, details: {status_code} {e.details()}') 
             except Exception as e:
                 self.logger.debug(f'Some other non-grpc error, details: {status_code} {e.details()}')             
 
             with self.lock :
-                key = (entry.clientid, entry.sequence_number)
+                key = (start_idx, last_idx)
                 self.counter[key] += 1
                 if self.counter[key] == len(self.__peers):
                     self.logger.debug(f'All the peers have been reached/retried for {key}')
                     self.counter.pop(key)
                     self.majority_counter.pop(key)
+
+    def clearDurabilityLog(self, follower : str, start_idx, last_idx) :
+         with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
+
+            stub = raftdb_grpc.ConsensusStub(channel)
+            entries = list()
+            for idx in range(start_idx, last_idx+1, 1):
+                
+                log_entry = self.__log.get(idx)
+                entry = raftdb.ClearDurabilityLogRequest.Entry(
+                    key = log_entry['key'],
+                    value = log_entry['value'],
+                    clientid = log_entry['clientid'],
+                    sequence_number = log_entry['sequence_number'])
+                
+                entries.append(entry)
+            
+            request = raftdb.ClearDurabilityLogRequest(
+                entry = entries)
+            try:
+                response = stub.ClearDurabilityLog(request)
+                
+                if response.code == config.RESPONSE_CODE_OK :
+                    self.logger.debug(f'Recieved response {response.code}')
+                else :
+                    self.logger.debug(f'Some shit happened {response.code}')    
+            except grpc.RpcError as e:
+                status_code = e.code()
+                if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                    self.logger.debug(f'Send durability logs failed')
+                    # allowing to retry infinitely as of now
+                    self.clearDurabilityLog(follower,start_idx, last_idx)
 
     def AppendEntries(self, request, context):
         # If previous term and log index for request matches the last entry in log, append
@@ -226,23 +274,34 @@ class Consensus(raftdb_grpc.ConsensusServicer):
             self.logger.debug('Leader log is empty, clearing follower log and adding first entry')
 
             self.__log.clear()
-            self.__log.append({'key' : entry.key,
+            entries = request.entry
+            for entry in entries :
+                value = {'key' : entry.key,
                                 'value' :entry.value,
                                 'term' : request.term, 
                                 'clientid': entry.clientid,
                                 'sequence_number' : entry.sequence_number
-                                })
+                                }
+                index_from_insert_at = self.__log.insert_at(entry.logIndex, value)
             return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_OK, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
         elif self.__log.get_log_idx() >= request.prev_log_index and self.__log.get(request.prev_log_index)['term'] == request.prev_term:
             self.logger.debug(f'Previous entry matches in the log for key - {entry.key} and value - {entry.value}')
 
-            value = {'key' : entry.key,
-                        'value' :entry.value,
-                        'term' : request.term,
-                        'clientid': entry.clientid,
-                        'sequence_number' : entry.sequence_number}
-            index_from_insert_at = self.__log.insert_at(request.logIndex, value) 
-            self.__log.commit_upto(min(request.lastCommitIndex, index_from_insert_at))
+            entries = request.entries
+            start_entry = 0
+            for entry in entries :
+
+                value = {'key' : entry.key,
+                                'value' :entry.value,
+                                'term' : request.term, 
+                                'clientid': entry.clientid,
+                                'sequence_number' : entry.sequence_number
+                                }
+                index_from_insert_at = self.__log.insert_at(entry.logIndex, value)
+                if start_entry == 0 :
+                    commit_idx = index_from_insert_at
+                start_entry += 1    
+            self.__log.commit_upto(min(request.lastCommitIndex, commit_idx))
             return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_OK, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
         else:
             self.logger.debug(f'Previous entry does not match in the log for key - {entry.key} and value - {entry.value}')
@@ -268,3 +327,10 @@ class Consensus(raftdb_grpc.ConsensusServicer):
 
         lastSafeIndex = self.__log.get_last_safe_index()
         return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_OK, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
+    
+    def ClearDurabilityLog(self, request, context) :
+        response = self.__log.clear_dura_log_follower(request.entries)   
+        if response == 'OK' :
+            return raftdb.ClearDurabilityLogResponse(code=config.RESPONSE_CODE_OK)
+        else :
+            return raftdb.ClearDurabilityLogResponse(code=config.RESPONSE_CODE_REJECT)

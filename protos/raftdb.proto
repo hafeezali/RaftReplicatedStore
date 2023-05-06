@@ -3,6 +3,7 @@ syntax = "proto3";
 service Client {
 	rpc Get (GetRequest) returns (GetResponse) {}
 	rpc Put (PutRequest) returns (PutResponse) {}
+	rpc Leader (LeaderRequest) returns (LeaderResponse) {}
 }
 
 service RaftElectionService {
@@ -13,6 +14,7 @@ service RaftElectionService {
 service Consensus {
 	rpc AppendEntries (LogEntry) returns (LogEntryResponse) {}
 	rpc AppendCorrection (CorrectionEntry) returns (CorrectionEntryResponse) {}
+	rpc ClearDurabilityLog (ClearDurabilityLogRequest) returns (ClearDurabilityLogResponse) {}
 }
 
 message GetRequest {
@@ -26,6 +28,14 @@ message PutRequest {
 	int32 sequence_number = 4;
 }
 
+message LeaderRequest {
+}
+
+message LeaderResponse {
+	int32 code = 1;
+	string leaderId = 2;
+}
+
 message GetResponse {
 	int32 code = 1;
 	repeated int32 value = 2;
@@ -34,7 +44,6 @@ message GetResponse {
 
 message PutResponse {
 	int32 code = 1;
-	string leaderId = 2;
 }
 
 message HeartbeatRequest {
@@ -64,8 +73,7 @@ message LogEntry {
 	int32 prev_term = 3;
 	int32 prev_log_index = 4;
 	int32 lastCommitIndex = 5;
-	# has to be repeated
-	Entry entry = 6;
+	repeated Entry entry = 6;
 	int32 current_term = 7;
 }
 
@@ -107,4 +115,17 @@ message VoteResponse {
 	bool success = 1;
 	int32 term = 2;
 	string leaderId = 3;
+}
+
+message ClearDurabilityLogRequest {
+message Entry {
+		repeated int32 key = 1;
+		repeated int32 value = 2;
+		int32 clientid = 3;
+		int32 sequence_number = 4;
+	}
+	repeated Entry entry = 1;
+}
+message ClearDurabilityLogResponse {
+	int32 code = 1;
 }
