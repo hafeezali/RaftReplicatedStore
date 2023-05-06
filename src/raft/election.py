@@ -5,7 +5,9 @@ import random
 import grpc
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
+import concurrent.futures
 from logs.log import Log
+import raft.dura_log_recovery as dura_log_recovery
 
 '''
 TODO:
@@ -15,6 +17,7 @@ TODO:
 4. [DONE] If we send a vote, set leader id to None since we are updating our term, will find out leader through heartbeat
 
 5. [TODO] Investigete heartbeat updating follower term issue. -- Leader failover test
+6. [TODO] Ensure that while we are constructing durability logs, the leader must not accept any new requests
 '''
 class Election(raftdb_grpc.RaftElectionService):
 
@@ -27,9 +30,15 @@ class Election(raftdb_grpc.RaftElectionService):
         self.logger = logger
         self.last_heartbeat_time = 0
         self.election_lock = Lock() # Adding for updating votes
+        self.dura_log_recon_lock = Lock()
 
     def run_election_service(self):
         self.logger.debug('Starting Election Timeout')
+
+        # Don't want to do this if this is the initial term since there won't be a leader
+        # After that first term, if we are starting this function, it means there was a node failure
+        if self.__log.get_term() > 0:
+            self.recover_follower_durability_logs()
         self.election_timeout()
 
     def begin_election(self):
@@ -118,8 +127,134 @@ class Election(raftdb_grpc.RaftElectionService):
         self.increment_num_votes()
         if self.get_num_votes() >= self.majority and self.__log.get_status() == config.STATE['CANDIDATE']:
             self.logger.info(f'Received majority of votes for term {self.__log.get_term()}')
+            self.construct_durability_logs()
             self.__log.set_self_leader()
             self.elected_leader()
+
+    def recover_follower_durability_logs(self):
+        self.logger.info('Recovering durability log for follower after starting up...')
+        
+        # To track number of responses received by followers. We want f followers to respond to be able to durable reconstruct the log
+        self.durability_response_count = 0
+        self.leader_durability_log = None
+        self.leader_response_received = False
+
+        request = raftdb.DurabilityLogRequest(server_id=self.__log.server_id)
+        
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for follower in self.peers:
+                executor.submit(self.send_durability_log_request_for_follower_recovery, follower = follower, request = request)
+
+        self.logger.debug('Waiting for responses from other replicas for durability log request...')
+        # we're considering 5 node setup. So, f = 2
+        f = config.FAILURES_TOLERATED
+        while not self.leader_response_received:
+            time.sleep(config.SERVER_SLEEP_TIME)
+
+        # Need to get response from majority and have to get response from leader.
+        while self.durability_response_count < f+1: ### Shouldn't this be less than???
+            time.sleep(config.SERVER_SLEEP_TIME)
+        
+        # Set durability log to be same as leader's which is safe.
+        try:
+            self.__log.set_dura_log(self.leader_durability_log)
+        except Exception as e:
+            self.logger.error(f'Error occurred, details: {e.details()}')
+
+    
+    def construct_durability_logs(self):
+        self.logger.debug('Requesting durability logs from followers...')
+
+        # To track number of responses received by followers. We want f followers to respond to be able to durable reconstruct the log
+        self.durability_response_count = 0
+        self.durability_logs = list()
+
+        request = raftdb.DurabilityLogRequest(server_id=self.__log.server_id)
+
+        # add own durability to list of dura logs
+        self.durability_logs.append(self.__log.get_dura_log())
+        self.durability_response_count = self.durability_response_count + 1
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for follower in self.peers:
+                executor.submit(self.send_durability_log_request, follower = follower, request = request)
+
+        self.logger.debug('Waiting for responses from followers for durability log request...')
+        # we're considering 5 node setup. So, f = 2
+        f = config.FAILURES_TOLERATED
+        while self.durability_response_count <= f+1: ### Shouldn't this be less than???
+            time.sleep(config.SERVER_SLEEP_TIME)
+        
+        # use the top 3 logs to reconstruct the durability log at the leader
+        try:
+            durability_logs = dura_log_recovery.recover_durability_log(self.durability_logs[:f+1], f)
+            self.__log.set_dura_log(durability_logs)
+        except Exception as e:
+            self.logger.error(f'Error occurred, details: {e.details()}')
+
+    def send_durability_log_request_for_follower_recovery(self, follower: str, request):
+        with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
+            self.logger.debug(f'Sending durability log request for follower recovery to follower: {follower}')
+
+            stub = raftdb_grpc.RaftElectionServiceStub(channel)
+            response = None
+            try:
+                response = stub.RequestDurabilityLogs(request)
+                self.logger.debug(f'Received response {response.code}')            
+            except grpc.RpcError as e:
+                status_code = e.code()
+                if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                    self.logger.debug(f'Request durability log request for follower recovery failed with timeout error, follower: {follower}, {status_code} details: {e.details()}')
+                    self.send_durability_log_request(follower=follower, request=request)
+            except Exception as e:
+                self.logger.debug(f'Some other non-grpc error, details: {status_code} {e.details()}')
+
+            with self.dura_log_recon_lock:
+                if response.isLeader:
+                    self.leader_response_received = True
+                    if response.entries == None:
+                        self.logger.debug("Leader's durability logs is None ??? BAD BAD")
+                        self.leader_durability_log = list()
+                    else:
+                        self.leader_durability_log = response.entries
+                self.durability_response_count += 1
+
+    def send_durability_log_request(self, follower: str, request):
+        with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
+            self.logger.debug(f'Sending durability log request to follower: {follower}')
+
+            stub = raftdb_grpc.RaftElectionServiceStub(channel)
+
+            response = None
+            try:
+                response = stub.RequestDurabilityLogs(request)
+                self.logger.debug(f'Received response {response.code}')            
+            except grpc.RpcError as e:
+                status_code = e.code()
+                if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                    self.logger.debug(f'Request durability log request failed with timeout error, follower: {follower}, {status_code} details: {e.details()}')
+                    self.send_durability_log_request(follower=follower, request=request)
+            except Exception as e:
+                self.logger.debug(f'Some other non-grpc error, details: {status_code} {e.details()}')
+
+            with self.dura_log_recon_lock:
+                self.durability_logs.append(response.entries)
+                self.durability_response_count += 1
+
+    def RequestDurabilityLogs(self, request, context):
+        self.logger.debug(f'Handling durability log request from {request.server_id}')
+        entries = list()
+        dura_log_entries = self.__log.get_dura_log()
+        for entry in dura_log_entries:
+            dura_entry = raftdb.LogEntry(
+                key = entry['key'],
+                value = entry['value'],
+                clientid = entry['clientid'],
+                sequence_number = entry['sequence_number']
+            )
+            entries.append(dura_entry)
+        isLeader = self.__log.get_status() == config.STATE['LEADER']
+        return raftdb.DurabilityLogResponse(code=200, entries=self.__log.get_dura_log(), isLeader=isLeader)
 
     def elected_leader(self):
         '''
@@ -378,4 +513,3 @@ class Election(raftdb_grpc.RaftElectionService):
             else:
                 self.logger.info(f'Rejecting vote for term: {candidate_term} for {candidate_Id}')
                 return raftdb.VoteResponse(success = False, term = self.__log.get_term(), leaderId = self.__log.get_leader())
-   
