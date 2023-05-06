@@ -134,7 +134,8 @@ class Log:
 		self.logger.info("Clear log backup done")
 
 	'''
-	On node restart, we want to recover node state and pickup from where we left off. This involves recovering log apart from server state
+	On node restart, we want to recover node state and pickup from where we left off. 
+	This involves recovering log apart from server state
 	'''
 	def recover(self):
 		self.logger.info("Recover")

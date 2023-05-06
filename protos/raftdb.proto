@@ -116,4 +116,5 @@ message DurabilityLogRequest {
 message DurabilityLogResponse {
 	int32 code = 1;
 	repeated LogEntry.Entry entries = 2;
+	bool isLeader = 3;
 }
