@@ -118,6 +118,11 @@ class RaftElectionServiceStub(object):
                 request_serializer=raftdb__pb2.VoteRequest.SerializeToString,
                 response_deserializer=raftdb__pb2.VoteResponse.FromString,
                 )
+        self.RequestDurabilityLogs = channel.unary_unary(
+                '/RaftElectionService/RequestDurabilityLogs',
+                request_serializer=raftdb__pb2.DurabilityLogRequest.SerializeToString,
+                response_deserializer=raftdb__pb2.DurabilityLogResponse.FromString,
+                )
 
 
 class RaftElectionServiceServicer(object):
@@ -135,6 +140,12 @@ class RaftElectionServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RequestDurabilityLogs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_RaftElectionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -147,6 +158,11 @@ def add_RaftElectionServiceServicer_to_server(servicer, server):
                     servicer.RequestVote,
                     request_deserializer=raftdb__pb2.VoteRequest.FromString,
                     response_serializer=raftdb__pb2.VoteResponse.SerializeToString,
+            ),
+            'RequestDurabilityLogs': grpc.unary_unary_rpc_method_handler(
+                    servicer.RequestDurabilityLogs,
+                    request_deserializer=raftdb__pb2.DurabilityLogRequest.FromString,
+                    response_serializer=raftdb__pb2.DurabilityLogResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -189,6 +205,23 @@ class RaftElectionService(object):
         return grpc.experimental.unary_unary(request, target, '/RaftElectionService/RequestVote',
             raftdb__pb2.VoteRequest.SerializeToString,
             raftdb__pb2.VoteResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def RequestDurabilityLogs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/RaftElectionService/RequestDurabilityLogs',
+            raftdb__pb2.DurabilityLogRequest.SerializeToString,
+            raftdb__pb2.DurabilityLogResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

@@ -556,6 +556,9 @@ class Log:
 	def get_dura_log(self):
 		pass
 
+	def set_dura_log(self, logs):
+		self.logger.info(f'Setting durability logs...')
+		pass
 
 	# flush dura log always 
 	# flush consensus log immediateoy

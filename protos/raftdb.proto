@@ -8,6 +8,7 @@ service Client {
 service RaftElectionService {
 	rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
 	rpc RequestVote (VoteRequest) returns (VoteResponse) {}
+	rpc RequestDurabilityLogs (DurabilityLogRequest) returns (DurabilityLogResponse) {}
 }
 
 service Consensus {
@@ -64,7 +65,6 @@ message LogEntry {
 	int32 prev_term = 3;
 	int32 prev_log_index = 4;
 	int32 lastCommitIndex = 5;
-	# has to be repeated
 	Entry entry = 6;
 	int32 current_term = 7;
 }
@@ -107,4 +107,13 @@ message VoteResponse {
 	bool success = 1;
 	int32 term = 2;
 	string leaderId = 3;
+}
+
+message DurabilityLogRequest {
+	string server_id = 1;
+}
+
+message DurabilityLogResponse {
+	int32 code = 1;
+	repeated LogEntry.Entry entries = 2;
 }

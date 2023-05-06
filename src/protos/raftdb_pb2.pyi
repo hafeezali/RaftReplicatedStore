@@ -40,6 +40,20 @@ class CorrectionEntryResponse(_message.Message):
     term: int
     def __init__(self, code: _Optional[int] = ..., term: _Optional[int] = ..., lastSafeIndex: _Optional[int] = ...) -> None: ...
 
+class DurabilityLogRequest(_message.Message):
+    __slots__ = ["server_id"]
+    SERVER_ID_FIELD_NUMBER: _ClassVar[int]
+    server_id: str
+    def __init__(self, server_id: _Optional[str] = ...) -> None: ...
+
+class DurabilityLogResponse(_message.Message):
+    __slots__ = ["code", "entries"]
+    CODE_FIELD_NUMBER: _ClassVar[int]
+    ENTRIES_FIELD_NUMBER: _ClassVar[int]
+    code: int
+    entries: _containers.RepeatedCompositeFieldContainer[LogEntry.Entry]
+    def __init__(self, code: _Optional[int] = ..., entries: _Optional[_Iterable[_Union[LogEntry.Entry, _Mapping]]] = ...) -> None: ...
+
 class GetRequest(_message.Message):
     __slots__ = ["key"]
     KEY_FIELD_NUMBER: _ClassVar[int]
