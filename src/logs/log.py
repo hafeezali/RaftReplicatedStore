@@ -257,8 +257,7 @@ class Log:
 	def get_term(self):
 		# self.logger.info("Get term")
 		with self.lock:
-			# self.logger.info("Got the lock for term")
-			return self.term
+			return self.configs["term"]
 
 	def update_term(self, term):
 		self.logger.info("Update term to: " + str(term))
@@ -349,13 +348,15 @@ class Log:
 				self.configs["log_idx"] += 1
 			elif index > self.configs["log_idx"] + 1:
 				self.logger.error("index > log_idx + 1 -- must not be possible")
-				self.logger.info("Insert at index done")
+				self.logger.info("Error: Insert at index not done")
 				return -1
 			self.log[index] = entry
 			self.log[index]['commit_done'] = False
-
-			self.config_change['log_idx'] = True
-
+			self.last_safe_index = max(self.last_safe_index, index)
+			if entry['clientid'] not in self.configs['last_appended_command_per_client']:
+				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
+			elif entry['sequence_number'] > self.configs['last_appended_command_per_client'][entry['clientid']]:
+				self.configs["last_appended_command_per_client"].update({entry['clientid']: entry['sequence_number']})
 			self.logger.info("Insert at index done")
 			return index
 
@@ -368,8 +369,7 @@ class Log:
 		self.logger.info("Get leader")
 
 		with self.lock:
-			return self.leader_id
-
+			return self.configs["leader_id"]
 	def update_leader(self, leader):
 		self.logger.info("Update leader to: " + leader)
 

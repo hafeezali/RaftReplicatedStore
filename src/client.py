@@ -142,20 +142,25 @@ class Client:
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 responses = []
                 start_time = time.time()
-                for server, address in peer_list_mappings:
+                for server, address in peer_list_mappings.items():
                     responses.append(
                     executor.submit(self.sendPut, server_add = address, key = key, value = value, sequence_number = sequence_number, clientid = clientid)
                     )  
                 
                  
-                while time.time() - start_time() < config.PUT_TIMEOUT :
+                while time.time() - start_time < config.PUT_TIMEOUT :
                     time.sleep(10)
             
                 if self.put_sent_to_server[key] >= self.super_majority and self.put_sent_to_leader[key] == 1:
                     print(f"Put completed for  key: {key}, value: {value}") 
 
                 else :
-                    print(f"Something wrong happened in the put for key : {key}, value : {value}. You might want to retry.")    
+                    print(f"Something wrong happened in the put for key : {key}, value : {value}. You might want to retry.") 
+
+                if self.put_tried_counter[key] == len(peer_list_mappings) :
+                    self.put_sent_to_server.pop(key)
+                    self.put_sent_to_leader.pop(key)
+                    self.put_tried_counter.pop(key)       
 
     def sendPut(self,server_add, key, value, sequence_number, clientid) :
         key = (clientid, sequence_number)
@@ -181,13 +186,8 @@ class Client:
                 status_code = e.code()
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                     print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
-
             with self.lock :
-                self.put_tried_counter[key] += 1
-                if self.put_tried_counter[key] == len(peer_list_mappings) :
-                    self.put_sent_to_server.pop(key)
-                    self.put_sent_to_leader.pop(key)
-                    self.put_tried_counter.pop(key)
+                    self.put_tried_counter[key] += 1
                 
 if __name__ == '__main__':
     client = Client()
