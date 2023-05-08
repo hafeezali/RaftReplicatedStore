@@ -133,11 +133,11 @@ class Client:
 
 # the client knows the leader
         if self.leader_id != None and self.leader_id != '' and self.leader_id != 'No leader' :
-            key = (clientid, sequence_number)
+            key_local = (clientid, sequence_number)
             with self.lock :
-                self.put_sent_to_leader[key] = 0
-                self.put_sent_to_server[key] = 0
-                self.put_tried_counter[key] = 0
+                self.put_sent_to_leader[key_local] = 0
+                self.put_sent_to_server[key_local] = 0
+                self.put_tried_counter[key_local] = 0
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 responses = []
@@ -148,22 +148,25 @@ class Client:
                     )  
                 
                  
-                while time.time() - start_time < config.PUT_TIMEOUT :
-                    time.sleep(10)
+               
+                   
             
-                if self.put_sent_to_server[key] >= self.super_majority and self.put_sent_to_leader[key] == 1:
-                    print(f"Put completed for  key: {key}, value: {value}") 
+                while self.put_sent_to_server[key_local] < self.super_majority or self.put_sent_to_leader[key_local] != 1:
+                    time.sleep(5)
+                    print(f"In the while loop") 
 
+                if self.put_sent_to_server[key_local] >= self.super_majority and self.put_sent_to_leader[key_local] == 1:
+                    print(f"Put completed for  key: {key}, value: {value}") 
                 else :
                     print(f"Something wrong happened in the put for key : {key}, value : {value}. You might want to retry.") 
 
-                if self.put_tried_counter[key] == len(peer_list_mappings) :
-                    self.put_sent_to_server.pop(key)
-                    self.put_sent_to_leader.pop(key)
-                    self.put_tried_counter.pop(key)       
+                if self.put_tried_counter[key_local] == len(peer_list_mappings) :
+                    self.put_sent_to_server.pop(key_local)
+                    self.put_sent_to_leader.pop(key_local)
+                    self.put_tried_counter.pop(key_local)       
 
     def sendPut(self,server_add, key, value, sequence_number, clientid) :
-        key = (clientid, sequence_number)
+        key_local = (clientid, sequence_number)
         with grpc.insecure_channel(server_add) as channel:
             stub = raftdb_grpc.ClientStub(channel)
             request = raftdb.PutRequest(key = key, value = value, clientid = clientid, sequence_number = sequence_number)
@@ -172,9 +175,11 @@ class Client:
                 if response.code == config.RESPONSE_CODE_OK:
                     print(f"Put of key: {key}, value: {value} succeeded!\n")
                     with self.lock :
-                        self.put_sent_to_server[key] += 1
-                        if server_add == self.leader_id :
-                            self.put_sent_to_leader[key] = 1
+                        print(f"I am here")
+                        self.put_sent_to_server[key_local] += 1
+                        if server_add == peer_list_mappings[self.leader_id] :
+                            self.put_sent_to_leader[key_local] = 1
+                        print(f"{server_add} {self.leader_id}")    
 
                 elif response.code == config.RESPONSE_CODE_REJECT:
                     print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
@@ -187,7 +192,7 @@ class Client:
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                     print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
             with self.lock :
-                    self.put_tried_counter[key] += 1
+                    self.put_tried_counter[key_local] += 1
                 
 if __name__ == '__main__':
     client = Client()

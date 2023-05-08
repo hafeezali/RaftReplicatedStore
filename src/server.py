@@ -32,10 +32,12 @@ class Server(raftdb_grpc.ClientServicer):
 
         # Start thread for election service
         Thread(target=self.election.run_election_service()).start()
+        
 
         self.consensus = Consensus(peers=peer_list, log=self.log, logger=self.logger)
         # Create thread to trigger consensus periodically in the background
-        Thread(target=self.async_consensus()).start()
+        Thread(target=self.async_consensus).start()
+
         self.logger.info("Finished starting server... " + self.server_id)
 
     # non-nil ext operation. 
@@ -54,8 +56,10 @@ class Server(raftdb_grpc.ClientServicer):
             values = list()
             for k in request.key:
                 # check if that particular key is in the durability log, if not -> then directly query from the database, using the same old get function
+                self.logger.info(f"{self.log.durability_log}")
                 if self.log.get_dura_log_map(k) == -1 :
                     v = self.store.get(k)
+                    self.logger.info(f"{v}")
                     values.append(v) 
                 # if the key is there in the durability log, copy the entire durability log to consensus log, now start consensus on the consensus log for those added entries
                 else :
@@ -64,13 +68,11 @@ class Server(raftdb_grpc.ClientServicer):
                     status = self.groupConsensus(start_idx, last_idx) 
                     if status == 'OK' :
                         v = self.store.get(k)
-                        if v == config.KEY_NOT_FOUND : 
-                            values.append(-1000) 
-                        else :
-                            values.append(v)
-                        return raftdb.GetResponse(code = config.RESPONSE_CODE_OK, value = values, leaderId = leader_id)     
+                        values.append(v)
                     else :
-                        self.logger.info(f"Some issue with group consensus")
+                        self.logger.info(f"Some issue with group consensus")    
+            return raftdb.GetResponse(code = config.RESPONSE_CODE_OK, value = values, leaderId = leader_id)     
+                    
             
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
@@ -83,13 +85,17 @@ class Server(raftdb_grpc.ClientServicer):
     '''
     def async_consensus(self) :
         while True :
-            start_idx, last_idx = self.log.copy_dura_to_consensus_log()
-            if last_idx != -1 :
-                status = self.groupConsensus(start_idx, last_idx)
-                if status != config.RESPONSE_CODE_OK:
-                    self.logger.info(f"Some issue with async group consensus")
-
-            time.sleep(100)  
+            self.logger.info(f"Starting consensus")
+            if self.server_id == self.log.get_leader() :
+                self.logger.info(f"Async consensus triggered")
+                start_idx, last_idx = self.log.copy_dura_to_consensus_log()
+                if last_idx != -1 :
+                    status = self.groupConsensus(start_idx, last_idx)
+                    if status != config.RESPONSE_CODE_OK:
+                        self.logger.info(f"Some issue with async group consensus")
+            time.sleep(100) 
+            
+             
 
     '''
     This function is used to start group consensus on the particular values of the consensus log

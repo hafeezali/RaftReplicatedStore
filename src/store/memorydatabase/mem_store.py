@@ -52,6 +52,7 @@ class MemoryStore:
 	def get(self, key):
 		self.logger.info("Fetching value for key: " + str(key))
 		# error handling for get when key not found
+		self.logger.info(f"{self.db}")
 		if key in self.db :
 			return self.db.get(key)
 		else :

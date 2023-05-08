@@ -79,8 +79,8 @@ class Consensus(raftdb_grpc.ConsensusServicer):
             self.logger.debug(f'Committing the entry')
             # so consensus log needs to commit upto the last index
             self.__log.commit_upto(last_idx)
-            # clean up the durability of the leader till the last index -> kyunki start se till end index we have already pushed to the consenus log, should not keep track of the start index kyunki it will always be 0.
-            self.__log.clear_dura_log_leader(last_idx)
+            # clean up the durability of the leader for last-start+1 values, we don't know durability log index yahan
+            self.__log.clear_dura_log_leader(last_idx-start_idx + 1)
             # now we need to clean the durability logs of the followers as well, this is an
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 follower_responses = []
@@ -261,8 +261,8 @@ class Consensus(raftdb_grpc.ConsensusServicer):
         # If previous term and log index for request matches the last entry in log, append
         # Else, return error. Leader will correct log for follower from last safe index
         entry = request.entry
-        self.logger.debug(f'Trying to append key: {entry} {request.prev_term} {request.prev_log_index} {request.term}')
-        self.logger.debug('Trying to append key: ' + str(entry.key))
+        self.logger.debug(f'Trying to append key: {entry} {request.prev_term} {request.prev_log_index}')
+        self.logger.debug('Trying to append key: ' + str(entry))
 
         lastSafeIndex = self.__log.get_last_safe_index()
 
@@ -278,22 +278,22 @@ class Consensus(raftdb_grpc.ConsensusServicer):
             for entry in entries :
                 value = {'key' : entry.key,
                                 'value' :entry.value,
-                                'term' : request.term, 
+                                'term' : entry.term, 
                                 'clientid': entry.clientid,
                                 'sequence_number' : entry.sequence_number
                                 }
                 index_from_insert_at = self.__log.insert_at(entry.logIndex, value)
             return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_OK, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
         elif self.__log.get_log_idx() >= request.prev_log_index and self.__log.get(request.prev_log_index)['term'] == request.prev_term:
-            self.logger.debug(f'Previous entry matches in the log for key - {entry.key} and value - {entry.value}')
+            self.logger.debug(f'Previous entry matches in the log for key - {entry} and value - {entry}')
 
-            entries = request.entries
+            entries = request.entry
             start_entry = 0
             for entry in entries :
 
                 value = {'key' : entry.key,
                                 'value' :entry.value,
-                                'term' : request.term, 
+                                'term' : entry.term, 
                                 'clientid': entry.clientid,
                                 'sequence_number' : entry.sequence_number
                                 }
@@ -304,7 +304,7 @@ class Consensus(raftdb_grpc.ConsensusServicer):
             self.__log.commit_upto(min(request.lastCommitIndex, commit_idx))
             return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_OK, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
         else:
-            self.logger.debug(f'Previous entry does not match in the log for key - {entry.key} and value - {entry.value}')
+            self.logger.debug(f'Previous entry does not match in the log for key - {entry} and value - {entry}')
             return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_REJECT, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
     
     def AppendCorrection(self, request, context):

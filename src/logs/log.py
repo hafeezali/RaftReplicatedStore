@@ -552,10 +552,11 @@ class Log:
 			self.durability_log.append(entry)
 			key = (entry.clientid, entry.sequence_number)
 			self.durability_log_entry_set.add(key)
-			if entry.key in self.durability_log_mapper :
-				self.durability_log_mapper[entry.key] += 1
-			else :
-				self.durability_log_mapper[entry.key] = 1	
+			for e in entry.key :
+				if e in self.durability_log_mapper :
+					self.durability_log_mapper[e] += 1
+				else :
+					self.durability_log_mapper[e] = 1	
 		
 		self.logger.info(f"Appended entry : {entry} to the durability log successfully")
 
@@ -565,6 +566,7 @@ class Log:
 	# created a durability lock, separate from the consensus lock
 	def copy_dura_to_consensus_log(self):
 		with self.durability_lock :
+			self.logger.info(f"Copying durability log to consensus log")
 			# the start index of the consensus logs from where I will append these entries is the length
 			start_index = len(self.log)
 			for entry in self.durability_log :
@@ -574,32 +576,36 @@ class Log:
                             'clientid': entry.clientid,
                             'sequence_number' : entry.sequence_number})
 			last_index = len(self.log) - 1
-
+			self.logger.info(f"start : {start_index}, last : {last_index}")
 		return start_index, last_index
 
 	# only called by follower
-	def clear_dura_log_mapper(self, key):
-		if key in self.durability_log_mapper :
-			value = self.durability_log_mapper[key]
-			if value == 1:
-				self.durability_log_mapper.pop(key)
+	def clear_dura_log_mapper(self, tuples):
+		self.logger.info(f"{tuples}")
+		keys, values = tuples
+		for key in keys :
+			if key in self.durability_log_mapper :
+				value = self.durability_log_mapper[key]
+				if value == 1:
+					self.durability_log_mapper.pop(key)
+				else :
+					self.durability_log_mapper[key] = value - 1
 			else :
-				self.durability_log_mapper[key] = value - 1
-		else :
-			print("Not there in the mapper")
+				print("Not there in the mapper")
 
 	# Only called by leader
 	'''
 	Remove entries directly till an index
 	'''
-	def clear_dura_log_leader(self, index):
+	def clear_dura_log_leader(self, count):
+		self.logger.info(f"clearing the leader durability for {count} values")
 		with self.durability_lock :
-			for idx in range(0, index+1, 1) :
+			for idx in range(count) :
 				entry = self.durability_log[idx]
 				self.clear_dura_log_mapper((entry.key, entry.value))
 
-			self.durability_log = self.durability_log[index+1:]
-
+			self.durability_log = self.durability_log[count:]
+		self.logger.info(f"Durability log now : {self.durability_log}")
 
 
 	'''
@@ -621,6 +627,7 @@ class Log:
 
 				
 	def get_dura_log_map(self, key) :
+		self.logger.info(f"Finding if {key} is in the mapper")
 		if key in self.durability_log_mapper :
 			return 1
 		else :

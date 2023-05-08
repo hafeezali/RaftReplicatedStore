@@ -116,33 +116,33 @@ class LeaderResponse(_message.Message):
     def __init__(self, code: _Optional[int] = ..., leaderId: _Optional[str] = ...) -> None: ...
 
 class LogEntry(_message.Message):
-    __slots__ = ["current_term", "entry", "lastCommitIndex", "logIndex", "prev_log_index", "prev_term", "term"]
+    __slots__ = ["current_term", "entry", "lastCommitIndex", "prev_log_index", "prev_term"]
     class Entry(_message.Message):
-        __slots__ = ["clientid", "key", "sequence_number", "value"]
+        __slots__ = ["clientid", "key", "logIndex", "sequence_number", "term", "value"]
         CLIENTID_FIELD_NUMBER: _ClassVar[int]
         KEY_FIELD_NUMBER: _ClassVar[int]
+        LOGINDEX_FIELD_NUMBER: _ClassVar[int]
         SEQUENCE_NUMBER_FIELD_NUMBER: _ClassVar[int]
+        TERM_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         clientid: int
         key: _containers.RepeatedScalarFieldContainer[int]
+        logIndex: int
         sequence_number: int
+        term: int
         value: _containers.RepeatedScalarFieldContainer[int]
-        def __init__(self, key: _Optional[_Iterable[int]] = ..., value: _Optional[_Iterable[int]] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ...) -> None: ...
+        def __init__(self, key: _Optional[_Iterable[int]] = ..., value: _Optional[_Iterable[int]] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ..., term: _Optional[int] = ..., logIndex: _Optional[int] = ...) -> None: ...
     CURRENT_TERM_FIELD_NUMBER: _ClassVar[int]
     ENTRY_FIELD_NUMBER: _ClassVar[int]
     LASTCOMMITINDEX_FIELD_NUMBER: _ClassVar[int]
-    LOGINDEX_FIELD_NUMBER: _ClassVar[int]
     PREV_LOG_INDEX_FIELD_NUMBER: _ClassVar[int]
     PREV_TERM_FIELD_NUMBER: _ClassVar[int]
-    TERM_FIELD_NUMBER: _ClassVar[int]
     current_term: int
     entry: _containers.RepeatedCompositeFieldContainer[LogEntry.Entry]
     lastCommitIndex: int
-    logIndex: int
     prev_log_index: int
     prev_term: int
-    term: int
-    def __init__(self, term: _Optional[int] = ..., logIndex: _Optional[int] = ..., prev_term: _Optional[int] = ..., prev_log_index: _Optional[int] = ..., lastCommitIndex: _Optional[int] = ..., entry: _Optional[_Iterable[_Union[LogEntry.Entry, _Mapping]]] = ..., current_term: _Optional[int] = ...) -> None: ...
+    def __init__(self, prev_term: _Optional[int] = ..., prev_log_index: _Optional[int] = ..., lastCommitIndex: _Optional[int] = ..., entry: _Optional[_Iterable[_Union[LogEntry.Entry, _Mapping]]] = ..., current_term: _Optional[int] = ...) -> None: ...
 
 class LogEntryResponse(_message.Message):
     __slots__ = ["code", "lastSafeIndex", "term"]
