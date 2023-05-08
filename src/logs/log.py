@@ -11,6 +11,8 @@ import shelve
 from raft.config import STATE
 from raft.config import SERVER_SLEEP_TIME, FLUSH_CONFIG_TIME
 from store.database import Database
+import protos.raftdb_pb2 as raftdb
+import protos.raftdb_pb2_grpc as raftdb_grpc
 
 '''
 Log layer responsible for
@@ -56,9 +58,11 @@ class Log:
 		self.backup_dir = 'backup'
 		log_backup_file_name = server_id + '_log'
 		config_backup_file_name = server_id + '_config'
+		dura_backup_file_name = server_id + '_dura'
 
 		self.log_path = path.join(self.backup_dir, log_backup_file_name)
 		self.config_path = path.join(self.backup_dir, config_backup_file_name)
+		self.dura_path = path.join(self.backup_dir, dura_backup_file_name)
 
 		self.check_backup_dir()
 
@@ -122,9 +126,10 @@ class Log:
 
 		log_file = shelve.open(self.log_path, 'c', writeback=True)
 		config_file = shelve.open(self.config_path, 'c', writeback=True)
+		dura_file = shelve.open(self.dura_path, 'c', writeback=True)
 
 		log_file.clear()
-
+		dura_file.clear()
 		config_file['last_commit_idx'] = self.configs["last_commit_idx"]
 		config_file['log_idx'] = self.configs["log_idx"]
 		config_file['last_applied_idx'] = self.configs["last_applied_idx"]
@@ -132,6 +137,7 @@ class Log:
 
 		log_file.close()
 		config_file.close()
+		dura_file.close()
 
 		self.database.clear_backup()
 
@@ -145,6 +151,7 @@ class Log:
 
 		log_file = shelve.open(self.log_path, 'c', writeback=True)
 		config_file = shelve.open(self.config_path, 'c', writeback=True)
+		dura_file = shelve.open(self.dura_path, 'c', writeback=True)
 
 		try:
 			self.log.clear()
@@ -152,6 +159,24 @@ class Log:
 				self.log[int(key)] = log_file[key]
 		except Exception as e:
 			self.logger.info("Exception in recover method when reading log")
+		try:
+			self.durability_log.clear()
+			self.durability_log_entry_set.clear()
+			self.durability_log_mapper.clear()
+			if 'log_entry' in dura_file :
+				entries = dura_file['log_entry']
+				for entry in entries :
+					request = raftdb.PutRequest(key = entry['key'], value = entry['value'], clientid = entry['clientid'], sequence_number = entry['sequence_number'])
+					self.durability_log.append(request)
+					key = (entry['clientid'], entry['sequence_number'])
+					self.durability_log_entry_set.add(key)
+					for e in entry['key'] :
+						if e in self.durability_log_mapper :
+							self.durability_log_mapper[e] += 1
+						else :
+							self.durability_log_mapper[e] = 1
+		except Exception as e:
+			self.logger.info("Exception in recover method when reading durability log")
 
 		try:
 			if config_file['last_commit_idx']:
@@ -192,6 +217,7 @@ class Log:
 
 		log_file.close()
 		config_file.close()
+		dura_file.close()
 
 		# Apply entries from log that were not yet flushed
 		self.logger.info(f"Config recovery done, need to replay logs from {self.configs['last_flushed_idx']}")
@@ -242,6 +268,42 @@ class Log:
 
 			config_file.close()
 			time.sleep(FLUSH_CONFIG_TIME)
+
+	def flush_dura(self, entry) :
+		self.logger.info("Flush for entry: " + str(entry))
+		try:
+			dura_file = shelve.open(self.dura_path, 'c', writeback=True)
+			if 'log_entry' not in dura_file :
+				dura_file['log_entry'] = list()
+			entry_dict = {
+				'key' : list(entry.key),
+				'value' : list(entry.value), 
+				'clientid' : entry.clientid,
+				'sequence_number' : entry.sequence_number
+			}	
+			dura_file['log_entry'].append(entry_dict)
+			dura_file.close()
+		except Exception as e:
+			self.logger.info(f'Exception, details: {e}') 
+			return False
+
+		self.logger.info("Flush done")
+		return True
+	
+	def clear_dura_log_backup(self, index) :
+		self.logger.info(f"Removing {index} from the dura_log backup")
+		try:
+			dura_file = shelve.open(self.dura_path, 'c', writeback=True)
+			dura_list = dura_file['log_entry']
+			del dura_list[index]
+			dura_file['log_entry'] = dura_list
+			dura_file.close()
+		except Exception as e:
+			self.logger.info(f'Exception, details: {e}') 
+			return False
+
+		self.logger.info("Flush done")
+		return True
 
 	def get_log_idx(self):
 		self.logger.info("Get log idx")
@@ -550,6 +612,7 @@ class Log:
 		self.logger.info(f"Appending entry : {entry} to the durability log")
 		with self.durability_lock :
 			self.durability_log.append(entry)
+			self.flush_dura(entry)
 			key = (entry.clientid, entry.sequence_number)
 			self.durability_log_entry_set.add(key)
 			for e in entry.key :
@@ -603,6 +666,7 @@ class Log:
 			for idx in range(count) :
 				entry = self.durability_log[idx]
 				self.clear_dura_log_mapper((entry.key, entry.value))
+				self.clear_dura_log_backup(idx)
 
 			self.durability_log = self.durability_log[count:]
 		self.logger.info(f"Durability log now : {self.durability_log}")
@@ -619,6 +683,7 @@ class Log:
 				last_idx_dura = len(self.durability_log) - 1
 				for idx_dura in range(last_idx_dura, 0, -1) :
 					if self.durability_log[idx_dura] == entry :
+						self.clear_dura_log_backup(idx_dura)
 						del self.durability_log[idx_dura]
 						self.clear_dura_log_mapper((entry.key, entry.value))
 

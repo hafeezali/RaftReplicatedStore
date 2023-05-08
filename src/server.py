@@ -84,12 +84,13 @@ class Server(raftdb_grpc.ClientServicer):
     All other things are handled in the group Consensus
     '''
     def async_consensus(self) :
+        time.sleep(100) 
         while True :
             self.logger.info(f"Starting consensus")
             if self.server_id == self.log.get_leader() :
                 self.logger.info(f"Async consensus triggered")
                 start_idx, last_idx = self.log.copy_dura_to_consensus_log()
-                if last_idx != -1 :
+                if last_idx != -1 and start_idx <= last_idx:
                     status = self.groupConsensus(start_idx, last_idx)
                     if status != config.RESPONSE_CODE_OK:
                         self.logger.info(f"Some issue with async group consensus")

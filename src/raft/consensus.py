@@ -329,7 +329,7 @@ class Consensus(raftdb_grpc.ConsensusServicer):
         return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_OK, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
     
     def ClearDurabilityLog(self, request, context) :
-        response = self.__log.clear_dura_log_follower(request.entries)   
+        response = self.__log.clear_dura_log_follower(request.entry)   
         if response == 'OK' :
             return raftdb.ClearDurabilityLogResponse(code=config.RESPONSE_CODE_OK)
         else :
