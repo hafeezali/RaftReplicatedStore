@@ -82,12 +82,12 @@ class Consensus(raftdb_grpc.ConsensusServicer):
             # clean up the durability of the leader for last-start+1 values, we don't know durability log index yahan
             self.__log.clear_dura_log_leader(last_idx-start_idx + 1)
             # now we need to clean the durability logs of the followers as well, this is an
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                follower_responses = []
-                for follower in self.__peers:
-                    follower_responses.append(
-                    executor.submit(self.clearDurabilityLog, follower = follower, start_idx = start_idx, last_idx = last_idx)
-                )  
+            # with concurrent.futures.ThreadPoolExecutor() as executor:
+            #     follower_responses = []
+            #     for follower in self.__peers:
+            #         follower_responses.append(
+            #         executor.submit(self.clearDurabilityLog, follower = follower, start_idx = start_idx, last_idx = last_idx)
+            #     )  
 
             self.logger.info("Waiting for log to apply entry for key: ")
             while not self.__log.is_applied(last_idx) :
@@ -225,37 +225,37 @@ class Consensus(raftdb_grpc.ConsensusServicer):
                     self.counter.pop(key)
                     self.majority_counter.pop(key)
 
-    def clearDurabilityLog(self, follower : str, start_idx, last_idx) :
-         with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
+    # def clearDurabilityLog(self, follower : str, start_idx, last_idx) :
+    #      with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
 
-            stub = raftdb_grpc.ConsensusStub(channel)
-            entries = list()
-            for idx in range(start_idx, last_idx+1, 1):
+    #         stub = raftdb_grpc.ConsensusStub(channel)
+    #         entries = list()
+    #         for idx in range(start_idx, last_idx+1, 1):
                 
-                log_entry = self.__log.get(idx)
-                entry = raftdb.ClearDurabilityLogRequest.Entry(
-                    key = log_entry['key'],
-                    value = log_entry['value'],
-                    clientid = log_entry['clientid'],
-                    sequence_number = log_entry['sequence_number'])
+    #             log_entry = self.__log.get(idx)
+    #             entry = raftdb.ClearDurabilityLogRequest.Entry(
+    #                 key = log_entry['key'],
+    #                 value = log_entry['value'],
+    #                 clientid = log_entry['clientid'],
+    #                 sequence_number = log_entry['sequence_number'])
                 
-                entries.append(entry)
+    #             entries.append(entry)
             
-            request = raftdb.ClearDurabilityLogRequest(
-                entry = entries)
-            try:
-                response = stub.ClearDurabilityLog(request)
+    #         request = raftdb.ClearDurabilityLogRequest(
+    #             entry = entries)
+    #         try:
+    #             response = stub.ClearDurabilityLog(request)
                 
-                if response.code == config.RESPONSE_CODE_OK :
-                    self.logger.debug(f'Recieved response {response.code}')
-                else :
-                    self.logger.debug(f'Some shit happened {response.code}')    
-            except grpc.RpcError as e:
-                status_code = e.code()
-                if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
-                    self.logger.debug(f'Send durability logs failed')
-                    # allowing to retry infinitely as of now
-                    self.clearDurabilityLog(follower,start_idx, last_idx)
+    #             if response.code == config.RESPONSE_CODE_OK :
+    #                 self.logger.debug(f'Recieved response {response.code}')
+    #             else :
+    #                 self.logger.debug(f'Some shit happened {response.code}')    
+    #         except grpc.RpcError as e:
+    #             status_code = e.code()
+    #             if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+    #                 self.logger.debug(f'Send durability logs failed')
+    #                 # allowing to retry infinitely as of now
+    #                 self.clearDurabilityLog(follower,start_idx, last_idx)
 
     def AppendEntries(self, request, context):
         # If previous term and log index for request matches the last entry in log, append
@@ -328,9 +328,9 @@ class Consensus(raftdb_grpc.ConsensusServicer):
         lastSafeIndex = self.__log.get_last_safe_index()
         return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_OK, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
     
-    def ClearDurabilityLog(self, request, context) :
-        response = self.__log.clear_dura_log_follower(request.entry)   
-        if response == 'OK' :
-            return raftdb.ClearDurabilityLogResponse(code=config.RESPONSE_CODE_OK)
-        else :
-            return raftdb.ClearDurabilityLogResponse(code=config.RESPONSE_CODE_REJECT)
+    # def ClearDurabilityLog(self, request, context) :
+    #     response = self.__log.clear_dura_log_follower(request.entry)   
+    #     if response == 'OK' :
+    #         return raftdb.ClearDurabilityLogResponse(code=config.RESPONSE_CODE_OK)
+    #     else :
+    #         return raftdb.ClearDurabilityLogResponse(code=config.RESPONSE_CODE_REJECT)

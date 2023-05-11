@@ -273,15 +273,15 @@ class Log:
 		self.logger.info("Flush for entry: " + str(entry))
 		try:
 			dura_file = shelve.open(self.dura_path, 'c', writeback=True)
-			if 'log_entry' not in dura_file :
-				dura_file['log_entry'] = list()
+			if "log_entry" not in dura_file :
+				dura_file["log_entry"] = list()
 			entry_dict = {
 				'key' : list(entry.key),
 				'value' : list(entry.value), 
 				'clientid' : entry.clientid,
 				'sequence_number' : entry.sequence_number
 			}	
-			dura_file['log_entry'].append(entry_dict)
+			dura_file["log_entry"].append(entry_dict)
 			dura_file.close()
 		except Exception as e:
 			self.logger.info(f'Exception, details: {e}') 
@@ -294,9 +294,10 @@ class Log:
 		self.logger.info(f"Removing {index} from the dura_log backup")
 		try:
 			dura_file = shelve.open(self.dura_path, 'c', writeback=True)
-			dura_list = dura_file['log_entry']
+
+			dura_list = dura_file["log_entry"]
 			del dura_list[index]
-			dura_file['log_entry'] = dura_list
+			dura_file["log_entry"] = dura_list
 			dura_file.close()
 		except Exception as e:
 			self.logger.info(f'Exception, details: {e}') 
@@ -338,9 +339,18 @@ class Log:
 		with self.lock:
 			self.logger.info("Start last commit idx: " + str(self.configs["last_commit_idx"]))
 			idx = self.configs["last_commit_idx"]
+			follower = False
+			if self.configs["status"] == STATE['FOLLOWER'] :
+				self.logger.info("I am a follower")
+				follower = True
+			index_list = list()	
 			while idx + 1 <= index and idx + 1 <= self.configs["log_idx"]:
 				idx = idx + 1
 				self.log[idx]['commit_done'] = True
+				if follower == True:
+					self.logger.info("Cleaning up follower durability log")
+					index_list.append(idx)
+					self.clear_dura_log_follower(self.get(idx))
 			self.configs["last_commit_idx"] = idx
 			self.logger.info("End last commit idx: " + str(self.configs["last_commit_idx"]))
 
@@ -666,7 +676,7 @@ class Log:
 			for idx in range(count) :
 				entry = self.durability_log[idx]
 				self.clear_dura_log_mapper((entry.key, entry.value))
-				self.clear_dura_log_backup(idx)
+				self.clear_dura_log_backup(0)
 
 			self.durability_log = self.durability_log[count:]
 		self.logger.info(f"Durability log now : {self.durability_log}")
@@ -675,17 +685,31 @@ class Log:
 	'''
 	So, for all the entries in the request, just check in your durability log, if that exists -> then remove it, warna leave it
 	'''
-	def clear_dura_log_follower(self, entries):
+	def clear_dura_log_follower(self, entry):
 		with self.durability_lock :
-			
-			for entry in entries :
-				# starting from back to avoid index changes
-				last_idx_dura = len(self.durability_log) - 1
-				for idx_dura in range(last_idx_dura, 0, -1) :
-					if self.durability_log[idx_dura] == entry :
-						self.clear_dura_log_backup(idx_dura)
-						del self.durability_log[idx_dura]
-						self.clear_dura_log_mapper((entry.key, entry.value))
+			# starting from back to avoid index changes
+			self.logger.info("In the dura log clearing method for follower")
+			last_idx_dura = len(self.durability_log) - 1
+			for idx_dura in range(last_idx_dura, 0, -1) :
+
+				dura_entry = self.durability_log[idx_dura]
+				cand_entry ={
+					'key' : list(dura_entry.key),
+					'value' : list(dura_entry.value),
+					'clientid' : dura_entry.clientid,
+					'sequence_number' : dura_entry.sequence_number
+				}
+				self.logger.info(f"{entry} {cand_entry}")
+				cons_entry = {
+					'key' : entry["key"],
+					'value' : entry["value"],
+					'clientid' : entry["clientid"],
+					'sequence_number' : entry["sequence_number"]
+				}
+				if cand_entry == cons_entry :
+					# self.clear_dura_log_backup(idx_dura)
+					del self.durability_log[idx_dura]
+					self.clear_dura_log_mapper((dura_entry.key, dura_entry.value))
 
 		return 'OK'
 

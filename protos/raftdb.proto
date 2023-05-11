@@ -14,7 +14,6 @@ service RaftElectionService {
 service Consensus {
 	rpc AppendEntries (LogEntry) returns (LogEntryResponse) {}
 	rpc AppendCorrection (CorrectionEntry) returns (CorrectionEntryResponse) {}
-	rpc ClearDurabilityLog (ClearDurabilityLogRequest) returns (ClearDurabilityLogResponse) {}
 }
 
 message GetRequest {
@@ -114,17 +113,4 @@ message VoteResponse {
 	bool success = 1;
 	int32 term = 2;
 	string leaderId = 3;
-}
-
-message ClearDurabilityLogRequest {
-message Entry {
-		repeated int32 key = 1;
-		repeated int32 value = 2;
-		int32 clientid = 3;
-		int32 sequence_number = 4;
-	}
-	repeated Entry entry = 1;
-}
-message ClearDurabilityLogResponse {
-	int32 code = 1;
 }

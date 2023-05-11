@@ -20,9 +20,9 @@ class Client:
         self.leader_id = 'server-1'
         self.super_majority = len(peer_list_mappings)
         self.lock = Lock()
-        self.put_sent_to_server = dict()
-        self.put_sent_to_leader = dict()
-        self.put_tried_counter = dict()
+        self.put_sent_to_server = 0
+        self.put_sent_to_leader = 0
+        self.super_majority_status = False
 
 
     def get_sequence_number(self):
@@ -119,7 +119,6 @@ class Client:
                     print('Waiting for election to happen')
                     time.sleep(config.CLIENT_SLEEP_TIME)
                     response = stub.Leader(request, timeout=config.RPC_TIMEOUT)
-                    self.leader_id = response.leaderId.replace("'", "")
 
                 if response.code == config.RESPONSE_CODE_OK :
                    self.leader_id = response.leaderId.replace("'", "") 
@@ -133,40 +132,27 @@ class Client:
 
 # the client knows the leader
         if self.leader_id != None and self.leader_id != '' and self.leader_id != 'No leader' :
-            key_local = (clientid, sequence_number)
-            with self.lock :
-                self.put_sent_to_leader[key_local] = 0
-                self.put_sent_to_server[key_local] = 0
-                self.put_tried_counter[key_local] = 0
+            self.put_sent_to_leader= 0
+            self.put_sent_to_server = 0 
+            self.super_majority_status = False
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                responses = []
-                start_time = time.time()
-                for server, address in peer_list_mappings.items():
-                    responses.append(
-                    executor.submit(self.sendPut, server_add = address, key = key, value = value, sequence_number = sequence_number, clientid = clientid)
-                    )  
                 
-                 
-               
-                   
-            
-                while self.put_sent_to_server[key_local] < self.super_majority or self.put_sent_to_leader[key_local] != 1:
+                for server, address in peer_list_mappings.items():
+                    executor.submit(self.sendPut, server_add = address, key = key, value = value, sequence_number = sequence_number, clientid = clientid)
+                    
+                
+                while self.super_majority_status == False or self.put_sent_to_leader != 1:
                     time.sleep(5)
                     print(f"In the while loop") 
 
-                if self.put_sent_to_server[key_local] >= self.super_majority and self.put_sent_to_leader[key_local] == 1:
+                if self.super_majority_status== True and self.put_sent_to_leader == 1:
                     print(f"Put completed for  key: {key}, value: {value}") 
                 else :
                     print(f"Something wrong happened in the put for key : {key}, value : {value}. You might want to retry.") 
 
-                if self.put_tried_counter[key_local] == len(peer_list_mappings) :
-                    self.put_sent_to_server.pop(key_local)
-                    self.put_sent_to_leader.pop(key_local)
-                    self.put_tried_counter.pop(key_local)       
 
     def sendPut(self,server_add, key, value, sequence_number, clientid) :
-        key_local = (clientid, sequence_number)
         with grpc.insecure_channel(server_add) as channel:
             stub = raftdb_grpc.ClientStub(channel)
             request = raftdb.PutRequest(key = key, value = value, clientid = clientid, sequence_number = sequence_number)
@@ -176,10 +162,12 @@ class Client:
                     print(f"Put of key: {key}, value: {value} succeeded!\n")
                     with self.lock :
                         print(f"I am here")
-                        self.put_sent_to_server[key_local] += 1
+                        self.put_sent_to_server += 1
+                        if self.put_sent_to_server >= self.super_majority and self.super_majority_status == False:
+                            self.super_majority_status = True
                         if server_add == peer_list_mappings[self.leader_id] :
-                            self.put_sent_to_leader[key_local] = 1
-                        print(f"{server_add} {self.leader_id}")    
+                            self.put_sent_to_leader = 1
+                        print(f"Put sent to server {self.put_sent_to_server}")    
 
                 elif response.code == config.RESPONSE_CODE_REJECT:
                     print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
@@ -191,8 +179,6 @@ class Client:
                 status_code = e.code()
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
                     print(f"Client request for Put key: {key}, value: {value} timed out, details: {status_code} {e.details()}\n")
-            with self.lock :
-                    self.put_tried_counter[key_local] += 1
                 
 if __name__ == '__main__':
     client = Client()
