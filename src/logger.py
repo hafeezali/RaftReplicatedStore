@@ -4,8 +4,8 @@ import os
 
 class Logging:
     def __init__(self, server_id):
-        self.log_level = logging.DEBUG
-        # self.log_level = logging.CRITICAL
+        # self.log_level = logging.DEBUG
+        self.log_level = logging.CRITICAL
         # Logger name is set to server id
         server_id = server_id.replace("'", "")
         self.logger = logging.getLogger(server_id)
