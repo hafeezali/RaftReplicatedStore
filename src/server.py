@@ -36,7 +36,7 @@ class Server(raftdb_grpc.ClientServicer):
 
         self.consensus = Consensus(peers=peer_list, log=self.log, logger=self.logger)
         # Create thread to trigger consensus periodically in the background
-        Thread(target=self.async_consensus).start()
+        # Thread(target=self.async_consensus).start()
 
         self.logger.info("Finished starting server... " + self.server_id)
 
