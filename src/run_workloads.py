@@ -52,6 +52,7 @@ class RunWorkloads:
         self.client = client
         self.client_id = client_id
         self.num_elements = 1000
+        self.keys = []
         self.values = []
         self.key_start = key_start
         self.average_put_latencies = []
@@ -121,11 +122,11 @@ class RunWorkloads:
             r = random.randint(1, 100)
             if r > read_recent_write_percentage:
                 # Issue read to old key 
-                x = random.randint(0, len(self.values)-1)
+                x = random.randint(0, len(self.keys)-1)
                 response = (False, -1)
                 start_time = time.time()
                 while response[0] == False:
-                    response = self.client.requestGet([x + self.key_start])
+                    response = self.client.requestGet([self.keys[x]])
                 end_time = time.time()
                 num_read_old_writes += 1
                 elapsed_time = end_time - start_time
@@ -179,6 +180,7 @@ class RunWorkloads:
         for i, item in enumerate(self.values):
             key = list()
             key.append(i + self.key_start)
+            self.keys.append(i + self.key_start)
             value = list()
             value.append(item)
             inputs = [key, value, self.client_id]
@@ -187,13 +189,12 @@ class RunWorkloads:
                 response = self.client.requestPut(*inputs)
         print("Done adding initial elements to store")
 
-        print("making gets on random subset of items so that for v3 some will not be recent reads")
-        for i in range(len(self.values)):
-            r = random.randint(1,3)
-            if r == 1:
-                response = False, -1
-                while response[0] == False:
-                    response = self.client.requestGet([i + self.key_start])
+        print("making gets on all of items so that for v3 there will not be recent reads")
+        
+        for key in self.keys:
+            response = False, -1
+            while response[0] == False:
+                response = self.client.requestGet([key])
 
         print("Done with initial gets")
         print("Setup complete!!")
