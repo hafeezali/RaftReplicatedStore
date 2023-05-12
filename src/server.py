@@ -10,7 +10,7 @@ import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
 import raft.config as config
 from logger import Logging
-from threading import Thread
+from threading import Thread, Lock
 
 '''
 TODO:
@@ -19,6 +19,7 @@ TODO:
 3. There might be some inconsistency at the db level here - Puts are happening from log, whereas gets are happening here. Do SELECT and INSERT/UPDATE overlap in sqlite3? 
     Hopefully latching is implemented for in-mem dict by default...
 4. If get response is None, we need to set an appropriate error code and respond to client
+5. We can parallelize multiple get requests by having multiple consensus in parallel
 '''
 class Server(raftdb_grpc.ClientServicer):
 
@@ -29,14 +30,14 @@ class Server(raftdb_grpc.ClientServicer):
         self.store = Database(type=type, server_id=server_id, logger=self.logger)
         self.log = Log(server_id, self.store, self.logger)
         self.election = Election(peers=peer_list,log=self.log, logger=self.logger, serverId=server_id)
+        self.group_consensus_lock = Lock()
 
         # Start thread for election service
         Thread(target=self.election.run_election_service()).start()
-        
 
         self.consensus = Consensus(peers=peer_list, log=self.log, logger=self.logger)
         # Create thread to trigger consensus periodically in the background
-        Thread(target=self.async_consensus).start()
+        # Thread(target=self.async_consensus).start()
 
         self.logger.info("Finished starting server... " + self.server_id)
 
@@ -47,7 +48,6 @@ class Server(raftdb_grpc.ClientServicer):
     # We need lock for groupConsensus only until it is added to consensus log of leader but before replication.
     # Modify AppendEntries to take multiple entries instead of just one. Modify consensus layer to track last apply
     # How do we write a durability log -- list.
-    # TODO: We can parallelize multiple get requests by having multiple consensus in parallel
     def Get(self, request, context):
         # Strongly consistent -- if we allow only one outstanding client request, the system must be strongly consistent by default
         self.logger.info("Get request received for key: " + str(request.key))
@@ -63,16 +63,16 @@ class Server(raftdb_grpc.ClientServicer):
                     values.append(v) 
                 # if the key is there in the durability log, copy the entire durability log to consensus log, now start consensus on the consensus log for those added entries
                 else :
-                    start_idx, last_idx = self.log.copy_dura_to_consensus_log()
-                    # copied everything to the consensus log, now should start consensus on those values
-                    status = self.groupConsensus(start_idx, last_idx) 
-                    if status == 'OK' :
-                        v = self.store.get(k)
-                        values.append(v)
-                    else :
-                        self.logger.info(f"Some issue with group consensus")    
+                    with self.group_consensus_lock:
+                        start_idx, last_idx = self.log.copy_dura_to_consensus_log()
+                        # copied everything to the consensus log, now should start consensus on those values
+                        status = self.groupConsensus(start_idx, last_idx) 
+                        if status == 'OK':
+                            v = self.store.get(k)
+                            values.append(v)
+                        else :
+                            self.logger.info(f"Some issue with group consensus when executing for key: {k}")
             return raftdb.GetResponse(code = config.RESPONSE_CODE_OK, value = values, leaderId = leader_id)     
-                    
             
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
@@ -84,19 +84,18 @@ class Server(raftdb_grpc.ClientServicer):
     All other things are handled in the group Consensus
     '''
     def async_consensus(self) :
-        time.sleep(100) 
+        time.sleep(100)
         while True :
-            self.logger.info(f"Starting consensus")
-            if self.server_id == self.log.get_leader() :
-                self.logger.info(f"Async consensus triggered")
-                start_idx, last_idx = self.log.copy_dura_to_consensus_log()
-                if last_idx != -1 and start_idx <= last_idx:
-                    status = self.groupConsensus(start_idx, last_idx)
-                    if status != config.RESPONSE_CODE_OK:
-                        self.logger.info(f"Some issue with async group consensus")
-            time.sleep(100) 
-            
-             
+            with self.group_consensus_lock:
+                self.logger.info(f"Starting consensus")
+                if self.server_id == self.log.get_leader() :
+                    self.logger.info(f"Async consensus triggered")
+                    start_idx, last_idx = self.log.copy_dura_to_consensus_log()
+                    if last_idx != -1 and start_idx <= last_idx:
+                        status = self.groupConsensus(start_idx, last_idx)
+                        if status != config.RESPONSE_CODE_OK:
+                            self.logger.info(f"Some issue with async group consensus")
+            time.sleep(100)
 
     '''
     This function is used to start group consensus on the particular values of the consensus log
@@ -111,7 +110,6 @@ class Server(raftdb_grpc.ClientServicer):
            return raftdb.LeaderResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = leader_id)
         else :
             return raftdb.LeaderResponse(code = config.RESPONSE_CODE_OK, leaderId = leader_id)
-        
     
     def Put(self, request, context):
         self.logger.info("Put request received for key: " + str(request.key) + ", and value: " + str(request.value) + ", from client: " + str(request.clientid))
@@ -121,7 +119,6 @@ class Server(raftdb_grpc.ClientServicer):
         else:
             self.logger.info("Put request failed")
             return raftdb.PutResponse(code = config.RESPONSE_CODE_REJECT)
-        
 
 def start_server_thread(port, grpc_server):
     grpc_server.add_insecure_port('[::]:' + port)

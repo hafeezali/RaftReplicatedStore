@@ -38,56 +38,43 @@ class Consensus(raftdb_grpc.ConsensusServicer):
 
     def handlePut(self,entry):
         self.logger.debug(f'Handling the put request for client id - {entry.clientid} and sequence number - {entry.sequence_number}')
-        
         # duplicate request
         if self.__log.get_dura_log_entry((entry.clientid, entry.sequence_number))== 1:
             return 'OK'
-
         # append entry to durability log
         self.__log.append_to_dura_log(entry)   
         return 'OK'
-        
     
     '''
     This method is called to start the consensus on particular values of the consensus log
     '''
     def start_consensus(self, start_idx, last_idx) :
-        # to keep track of the RPCs which are sent to correct the consenus logs of the follower servers
+        # to keep track of the RPCs which are sent to correct the consensus logs of the follower servers
         key = (start_idx, last_idx)
         with self.lock :
             self.counter[key] = 0
             self.majority_counter[key] = 0
             self.ready_to_commit[key] = 0
 
-#  using similar code here as the broadcasting entries, except sending multiple entries here
+        # using similar code here as the broadcasting entries, except sending multiple entries here
         self.logger.debug('Broadcasting append entries...')
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            responses = []
             for follower in self.__peers:
-                responses.append(
-                    executor.submit(self.broadcastEntry, follower = follower, start_idx = start_idx, last_idx = last_idx,  log_index_to_commit = start_idx)
-                )              
+                executor.submit(self.broadcastEntry, follower = follower, start_idx = start_idx, last_idx = last_idx, log_index_to_commit = start_idx)
         
-        self.logger.debug("Waiting for responses from followers for : ") 
+        self.logger.debug("Waiting for responses from followers for : ")
         while self.ready_to_commit[key]!= 1 and self.__log.get_status() == config.STATE['LEADER']:
             time.sleep(config.SERVER_SLEEP_TIME)
 
         # only committing if I get majority and I am the leader
-        if self.__log.get_status() == config.STATE['LEADER'] and self.ready_to_commit[key] == 1: 
+        if self.__log.get_status() == config.STATE['LEADER'] and self.ready_to_commit[key] == 1:
             self.ready_to_commit.pop(key)
 
             self.logger.debug(f'Committing the entry')
             # so consensus log needs to commit upto the last index
             self.__log.commit_upto(last_idx)
             # clean up the durability of the leader for last-start+1 values, we don't know durability log index yahan
-            self.__log.clear_dura_log_leader(last_idx-start_idx + 1)
-            # now we need to clean the durability logs of the followers as well, this is an
-            # with concurrent.futures.ThreadPoolExecutor() as executor:
-            #     follower_responses = []
-            #     for follower in self.__peers:
-            #         follower_responses.append(
-            #         executor.submit(self.clearDurabilityLog, follower = follower, start_idx = start_idx, last_idx = last_idx)
-            #     )  
+            # self.__log.clear_dura_log_leader(last_idx) 
 
             self.logger.info("Waiting for log to apply entry for key: ")
             while not self.__log.is_applied(last_idx) :
@@ -103,7 +90,7 @@ class Consensus(raftdb_grpc.ConsensusServicer):
         return 'EXCEPTION'
 
     def create_log_entry_request(self, start_index, last_index):
-        self.logger.debug("Creating log entry request for index: ")
+        self.logger.debug(f"Creating log entry request for start_index: {start_index} and end_index: {last_index}")
         try:
             prev_term = -1
             prev_log_index = start_index - 1
@@ -198,7 +185,7 @@ class Consensus(raftdb_grpc.ConsensusServicer):
                     key = (start_idx, last_idx)
                     majority = (len(self.__peers))/2
                     with self.lock :
-                        self.logger.debug('Log appended for key: '  + 'adding to majority')
+                        self.logger.debug('Log appended for keys. Incrementing majority counter...')
                         self.majority_counter[key] += 1
                         if self.majority_counter[key] >= majority and key in self.ready_to_commit:
                             self.ready_to_commit[key] = 1
@@ -224,38 +211,6 @@ class Consensus(raftdb_grpc.ConsensusServicer):
                     self.logger.debug(f'All the peers have been reached/retried for {key}')
                     self.counter.pop(key)
                     self.majority_counter.pop(key)
-
-    # def clearDurabilityLog(self, follower : str, start_idx, last_idx) :
-    #      with grpc.insecure_channel(follower, options=(('grpc.enable_http_proxy', 0),)) as channel:
-
-    #         stub = raftdb_grpc.ConsensusStub(channel)
-    #         entries = list()
-    #         for idx in range(start_idx, last_idx+1, 1):
-                
-    #             log_entry = self.__log.get(idx)
-    #             entry = raftdb.ClearDurabilityLogRequest.Entry(
-    #                 key = log_entry['key'],
-    #                 value = log_entry['value'],
-    #                 clientid = log_entry['clientid'],
-    #                 sequence_number = log_entry['sequence_number'])
-                
-    #             entries.append(entry)
-            
-    #         request = raftdb.ClearDurabilityLogRequest(
-    #             entry = entries)
-    #         try:
-    #             response = stub.ClearDurabilityLog(request)
-                
-    #             if response.code == config.RESPONSE_CODE_OK :
-    #                 self.logger.debug(f'Recieved response {response.code}')
-    #             else :
-    #                 self.logger.debug(f'Some shit happened {response.code}')    
-    #         except grpc.RpcError as e:
-    #             status_code = e.code()
-    #             if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
-    #                 self.logger.debug(f'Send durability logs failed')
-    #                 # allowing to retry infinitely as of now
-    #                 self.clearDurabilityLog(follower,start_idx, last_idx)
 
     def AppendEntries(self, request, context):
         # If previous term and log index for request matches the last entry in log, append
@@ -300,7 +255,7 @@ class Consensus(raftdb_grpc.ConsensusServicer):
                 index_from_insert_at = self.__log.insert_at(entry.logIndex, value)
                 if start_entry == 0 :
                     commit_idx = index_from_insert_at
-                start_entry += 1    
+                start_entry += 1
             self.__log.commit_upto(min(request.lastCommitIndex, commit_idx))
             return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_OK, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
         else:
@@ -327,10 +282,3 @@ class Consensus(raftdb_grpc.ConsensusServicer):
 
         lastSafeIndex = self.__log.get_last_safe_index()
         return raftdb.LogEntryResponse(code=config.RESPONSE_CODE_OK, term = self.__log.get_term(), lastSafeIndex = lastSafeIndex)
-    
-    # def ClearDurabilityLog(self, request, context) :
-    #     response = self.__log.clear_dura_log_follower(request.entry)   
-    #     if response == 'OK' :
-    #         return raftdb.ClearDurabilityLogResponse(code=config.RESPONSE_CODE_OK)
-    #     else :
-    #         return raftdb.ClearDurabilityLogResponse(code=config.RESPONSE_CODE_REJECT)

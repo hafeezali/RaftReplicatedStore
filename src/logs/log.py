@@ -290,27 +290,29 @@ class Log:
 		self.logger.info("Flush done")
 		return True
 	
-	def clear_dura_log_backup(self, index) :
-		self.logger.info(f"Removing {index} from the dura_log backup")
+	def reset_dura_log(self):
+		self.logger.info(f"Resetting durability log...")
 		try:
 			dura_file = shelve.open(self.dura_path, 'c', writeback=True)
-
-			dura_list = dura_file["log_entry"]
-			del dura_list[index]
-			dura_file["log_entry"] = dura_list
+			# todo: must find a better way to do this...
+			entries = list()
+			for entry in self.durability_log:
+				entry_dict = {
+					'key' : list(entry.key),
+					'value' : list(entry.value), 
+					'clientid' : entry.clientid,
+					'sequence_number' : entry.sequence_number
+				}
+				entries.append(entry_dict)
+			dura_file["log_entry"] = entries
 			dura_file.close()
 		except Exception as e:
-			self.logger.info(f'Exception, details: {e}') 
-			return False
-
-		self.logger.info("Flush done")
-		return True
+			self.logger.info(f'Exception, details: {e}')
 
 	def get_log_idx(self):
 		self.logger.info("Get log idx")
 		with self.lock:
 			return self.configs["log_idx"]
-		
 		
 	def get_last_commit_index(self):
 		self.logger.info("Get last commit idx")
@@ -350,7 +352,7 @@ class Log:
 				if follower == True:
 					self.logger.info("Cleaning up follower durability log")
 					index_list.append(idx)
-					self.clear_dura_log_follower(self.get(idx))
+			self.clear_dura_log_follower(index_list)
 			self.configs["last_commit_idx"] = idx
 			self.logger.info("End last commit idx: " + str(self.configs["last_commit_idx"]))
 
@@ -611,8 +613,6 @@ class Log:
 
 			self.logger.info(f"Apply_from_index finished, from {start_idx} to {c_idx}")
 
-			
-
 	'''
 	- entry added to durability log list
 	- client id, sequence number - key added to entry set - duplicate requests
@@ -633,7 +633,6 @@ class Log:
 		
 		self.logger.info(f"Appended entry : {entry} to the durability log successfully")
 
-
 	# returns start and last index
 	# modify this with lock only
 	# created a durability lock, separate from the consensus lock
@@ -650,9 +649,8 @@ class Log:
                             'sequence_number' : entry.sequence_number})
 			last_index = len(self.log) - 1
 			self.logger.info(f"start : {start_index}, last : {last_index}")
-		return start_index, last_index
+			return start_index, last_index
 
-	# only called by follower
 	def clear_dura_log_mapper(self, tuples):
 		self.logger.info(f"{tuples}")
 		keys, values = tuples
@@ -666,63 +664,56 @@ class Log:
 			else :
 				print("Not there in the mapper")
 
-	# Only called by leader
 	'''
-	Remove entries directly till an index
+	Remove entries directly till an index. Only called by the leader
 	'''
-	def clear_dura_log_leader(self, count):
-		self.logger.info(f"clearing the leader durability for {count} values")
-		with self.durability_lock :
-			for idx in range(count) :
-				entry = self.durability_log[idx]
-				self.clear_dura_log_mapper((entry.key, entry.value))
-				self.clear_dura_log_backup(0)
+	# def clear_dura_log_leader(self, index):
+	# 	self.logger.info(f"clearing the leader durability log upto index: {index}")
+	# 	with self.durability_lock:
+	# 		for idx in range(index):
+	# 			entry = self.durability_log[idx]
+	# 			self.clear_dura_log_mapper((entry.key, entry.value))
 
-			self.durability_log = self.durability_log[count:]
-		self.logger.info(f"Durability log now : {self.durability_log}")
-
+	# 		self.durability_log = self.durability_log[index+1:]
+	# 		self.reset_dura_log()
+	# 	self.logger.info(f"Durability log now : {self.durability_log}")
 
 	'''
 	So, for all the entries in the request, just check in your durability log, if that exists -> then remove it, warna leave it
 	'''
-	def clear_dura_log_follower(self, entry):
+	def clear_dura_log_follower(self, indices):
+		keys = set()
+		for index in indices:
+			entry = self.get(index)
+			keys.add((entry['clientid'], entry['sequence_number']))
 		with self.durability_lock :
 			# starting from back to avoid index changes
 			self.logger.info("In the dura log clearing method for follower")
 			last_idx_dura = len(self.durability_log) - 1
 			for idx_dura in range(last_idx_dura, 0, -1) :
-
 				dura_entry = self.durability_log[idx_dura]
-				cand_entry ={
-					'key' : list(dura_entry.key),
-					'value' : list(dura_entry.value),
-					'clientid' : dura_entry.clientid,
-					'sequence_number' : dura_entry.sequence_number
-				}
-				self.logger.info(f"{entry} {cand_entry}")
-				cons_entry = {
-					'key' : entry["key"],
-					'value' : entry["value"],
-					'clientid' : entry["clientid"],
-					'sequence_number' : entry["sequence_number"]
-				}
-				if cand_entry == cons_entry :
-					# self.clear_dura_log_backup(idx_dura)
+				key = (dura_entry.clientid, dura_entry.sequence_number)
+				if key in keys:
+					self.clear_dura_log_mapper((dura_entry['key'], dura_entry['value']))
 					del self.durability_log[idx_dura]
-					self.clear_dura_log_mapper((dura_entry.key, dura_entry.value))
-
+			self.logger.info("Durability log after clearing logs...")
+			self.logger.info(self.durability_log)
+			self.reset_dura_log()
 		return 'OK'
 
 
 				
 	def get_dura_log_map(self, key) :
 		self.logger.info(f"Finding if {key} is in the mapper")
+		# check this...
+		self.logger.info(self.durability_log_mapper)
 		if key in self.durability_log_mapper :
 			return 1
 		else :
 			return -1
+
 	def get_dura_log(self):
-		pass
+		return self.durability_log
 
 	'''
 		This function is to check for a duplicate put request
@@ -734,8 +725,3 @@ class Log:
 			return 1
 		else : 
 			return -1		
-
-	# flush dura log always 
-	# flush consensus log immediateoy
-	# include dura log index in configs. it needs to be persisted the same way as the other configs
-	# dura log index needs to be updated after clear_dura_log and after append_dura_log after acquiring lock!

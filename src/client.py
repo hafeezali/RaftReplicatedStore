@@ -100,11 +100,10 @@ class Client:
         - If there is no leader in the system, then the server would send code = redirect. Try until you get a leader
         - Once you get the code = OK and a leader in the system, set the leader id 
     - If the value of leader is set
-        - add keys to the maps to track RPCs being sent
         - fire threads to all the servers
         - wait until a put timeout (can remove this step of waiting for timeout, can wait infinitely)
         - if supermajority achieved and leader, put is completed   
- '''
+    '''
     def requestPut(self, key, value, clientid, sequence_number):
         if self.leader_id == None or self.leader_id == '' or self.leader_id == 'No leader' :
             with grpc.insecure_channel(self.server_addr) as channel:
@@ -121,7 +120,7 @@ class Client:
                     response = stub.Leader(request, timeout=config.RPC_TIMEOUT)
 
                 if response.code == config.RESPONSE_CODE_OK :
-                   self.leader_id = response.leaderId.replace("'", "") 
+                   self.leader_id = response.leaderId.replace("'", "")
 
             except grpc.RpcError as e:
                 status_code = e.code()
@@ -130,7 +129,7 @@ class Client:
                 else:
                     print(f'Connection to {self.leader_id} failed. You may try the request in sometime')       
 
-# the client knows the leader
+        # the client knows the leader
         if self.leader_id != None and self.leader_id != '' and self.leader_id != 'No leader' :
             self.put_sent_to_leader= 0
             self.put_sent_to_server = 0 
@@ -140,19 +139,19 @@ class Client:
                 
                 for server, address in peer_list_mappings.items():
                     executor.submit(self.sendPut, server_add = address, key = key, value = value, sequence_number = sequence_number, clientid = clientid)
-                    
                 
                 while self.super_majority_status == False or self.put_sent_to_leader != 1:
                     time.sleep(5)
-                    print(f"In the while loop") 
+                    print(f"Waiting to receive ack from super majority...")
 
-                if self.super_majority_status== True and self.put_sent_to_leader == 1:
+                if self.super_majority_status == True and self.put_sent_to_leader == 1:
                     print(f"Put completed for  key: {key}, value: {value}") 
                 else :
-                    print(f"Something wrong happened in the put for key : {key}, value : {value}. You might want to retry.") 
+                    print(f"Something wrong happened in the put for key : {key}, value : {value}. You might want to retry.")
+        else:
+            print(f"Put request has not gone through. Most probably there was a grpc error when trying to fetch leader details\n")
 
-
-    def sendPut(self,server_add, key, value, sequence_number, clientid) :
+    def sendPut(self, server_add, key, value, sequence_number, clientid) :
         with grpc.insecure_channel(server_add) as channel:
             stub = raftdb_grpc.ClientStub(channel)
             request = raftdb.PutRequest(key = key, value = value, clientid = clientid, sequence_number = sequence_number)
@@ -161,7 +160,6 @@ class Client:
                 if response.code == config.RESPONSE_CODE_OK:
                     print(f"Put of key: {key}, value: {value} succeeded!\n")
                     with self.lock :
-                        print(f"I am here")
                         self.put_sent_to_server += 1
                         if self.put_sent_to_server >= self.super_majority and self.super_majority_status == False:
                             self.super_majority_status = True
@@ -170,11 +168,9 @@ class Client:
                         print(f"Put sent to server {self.put_sent_to_server}")    
 
                 elif response.code == config.RESPONSE_CODE_REJECT:
-                    print(f"Put of key: {key}, value: {value} failed! Please try again.\n")
-						
+                    print(f"Put of key: {key}, value: {value} failed for server: {server_add}! Please try again.\n")
                 else:
                     print("Something went wrong, exiting put method with response code: " + str(response.code) + "\n")
-						
             except grpc.RpcError as e:
                 status_code = e.code()
                 if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:

@@ -5,29 +5,6 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
-class ClearDurabilityLogRequest(_message.Message):
-    __slots__ = ["entry"]
-    class Entry(_message.Message):
-        __slots__ = ["clientid", "key", "sequence_number", "value"]
-        CLIENTID_FIELD_NUMBER: _ClassVar[int]
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        SEQUENCE_NUMBER_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        clientid: int
-        key: _containers.RepeatedScalarFieldContainer[int]
-        sequence_number: int
-        value: _containers.RepeatedScalarFieldContainer[int]
-        def __init__(self, key: _Optional[_Iterable[int]] = ..., value: _Optional[_Iterable[int]] = ..., clientid: _Optional[int] = ..., sequence_number: _Optional[int] = ...) -> None: ...
-    ENTRY_FIELD_NUMBER: _ClassVar[int]
-    entry: _containers.RepeatedCompositeFieldContainer[ClearDurabilityLogRequest.Entry]
-    def __init__(self, entry: _Optional[_Iterable[_Union[ClearDurabilityLogRequest.Entry, _Mapping]]] = ...) -> None: ...
-
-class ClearDurabilityLogResponse(_message.Message):
-    __slots__ = ["code"]
-    CODE_FIELD_NUMBER: _ClassVar[int]
-    code: int
-    def __init__(self, code: _Optional[int] = ...) -> None: ...
-
 class CorrectionEntry(_message.Message):
     __slots__ = ["current_term", "entries", "lastCommitIndex"]
     class Correction(_message.Message):
