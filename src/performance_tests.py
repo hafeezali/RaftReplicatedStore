@@ -171,7 +171,7 @@ def start_clients(num_clients, id, key, start_seq_num):
     print(f"Total number of requests: {total_num_requests}")
     # print(f"PUT Throughput: {total_num_requests/total_put_time}")
     # print(f"GET Throughput: {total_num_requests/totatl_get_time}")
-    # print(f"The put latency average over all threads: {put_latency/num_clients} ")
+    print(f"The put latency average over all threads: {put_latency/num_clients} ")
     # print(f"The put latency average over all threads: {get_latency/num_clients} ")
 
 def print_observed_tp():
