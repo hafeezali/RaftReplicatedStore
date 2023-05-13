@@ -27,7 +27,7 @@ class PerformanceTests:
     def __init__(self, client: ClientPerf, client_id, key_start):
         self.client = client
         self.client_id = client_id
-        self.num_elements = 10
+        self.num_elements = 1000
         self.values = []
         self.key_start = key_start
         self.average_put_latencies = []
@@ -92,24 +92,24 @@ class PerformanceTests:
             
     def run_tests(self):
         # run tests
-        num_runs = 10
+        num_runs = 1
         print("Running tests")
         for i in range(num_runs):
             self.add_items_to_store(i)
             # time.sleep(20)
-            self.test_get_latency(i)
+            # self.test_get_latency(i)
 
         avg_put_latency = mean(self.average_put_latencies)
         print(f"{self.client_id}: Average PUT Latency for adding {self.num_elements} items over {num_runs} runs: {avg_put_latency}")
             
-        avg_get_latency = mean(self.average_get_latencies)
-        print(f"{self.client_id} Average GET Latency for adding {self.num_elements} items over {num_runs} runs: {avg_get_latency}")
+        # avg_get_latency = mean(self.average_get_latencies)
+        # print(f"{self.client_id} Average GET Latency for adding {self.num_elements} items over {num_runs} runs: {avg_get_latency}")
         
         with add_lock:
             global put_latency 
             put_latency += avg_put_latency
-            global get_latency
-            get_latency += avg_get_latency
+            # global get_latency
+            # get_latency += avg_get_latency
 
     def get_same_key(self):
         global num_requests
@@ -153,10 +153,10 @@ def start_clients(num_clients, id, key, start_seq_num):
     total_num_requests = num_clients * 100 * 10
     print(f"Number of Clients: {num_clients}")
     print(f"Total number of requests: {total_num_requests}")
-    print(f"PUT Throughput: {total_num_requests/total_put_time}")
-    print(f"GET Throughput: {total_num_requests/totatl_get_time}")
+    # print(f"PUT Throughput: {total_num_requests/total_put_time}")
+    # print(f"GET Throughput: {total_num_requests/totatl_get_time}")
     print(f"The put latency average over all threads: {put_latency/num_clients} ")
-    print(f"The put latency average over all threads: {get_latency/num_clients} ")
+    # print(f"The get latency average over all threads: {get_latency/num_clients} ")
 
 def print_observed_tp():
     global get_latencies
