@@ -144,7 +144,8 @@ class Log:
 		self.logger.info("Clear log backup done")
 
 	'''
-	On node restart, we want to recover node state and pickup from where we left off. This involves recovering log apart from server state
+	On node restart, we want to recover node state and pickup from where we left off. 
+	This involves recovering log apart from server state
 	'''
 	def recover(self):
 		self.logger.info("Recover")
@@ -724,6 +725,9 @@ class Log:
 	def get_dura_log(self):
 		pass
 
+	def set_dura_log(self, logs):
+		self.logger.info(f'Setting durability logs...')
+		pass
 	'''
 		This function is to check for a duplicate put request
 		Durability log entry set has client id, sequence number as the key
