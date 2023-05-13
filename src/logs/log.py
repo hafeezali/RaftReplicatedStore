@@ -622,7 +622,7 @@ class Log:
 		self.logger.info(f"Appending entry : {entry} to the durability log")
 		with self.durability_lock :
 			self.durability_log.append(entry)
-			self.flush_dura(entry)
+			# self.flush_dura(entry)
 			key = (entry.clientid, entry.sequence_number)
 			self.durability_log_entry_set.add(key)
 			for e in entry.key :
@@ -676,7 +676,7 @@ class Log:
 			for idx in range(count) :
 				entry = self.durability_log[idx]
 				self.clear_dura_log_mapper((entry.key, entry.value))
-				self.clear_dura_log_backup(0)
+				# self.clear_dura_log_backup(0)
 
 			self.durability_log = self.durability_log[count:]
 		self.logger.info(f"Durability log now : {self.durability_log}")

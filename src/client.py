@@ -6,7 +6,8 @@ import time
 from threading import Lock
 import concurrent
 
-peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:50053', 'server-3': 'localhost:50055'}
+peer_list_mappings = { 'server-1': 'localhost:50051', 'server-2': 'localhost:50053', 'server-3': 'localhost:50055',
+                       'server-4': 'localhost:50057', 'server-5': 'localhost:50059'}
 
 '''
 TODO:
@@ -143,7 +144,7 @@ class Client:
                     
                 
                 while self.super_majority_status == False or self.put_sent_to_leader != 1:
-                    time.sleep(5)
+                    time.sleep(10/1000)
                     print(f"In the while loop") 
 
                 if self.super_majority_status== True and self.put_sent_to_leader == 1:
