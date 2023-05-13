@@ -24,6 +24,11 @@ class ClientStub(object):
                 request_serializer=raftdb__pb2.PutRequest.SerializeToString,
                 response_deserializer=raftdb__pb2.PutResponse.FromString,
                 )
+        self.Leader = channel.unary_unary(
+                '/Client/Leader',
+                request_serializer=raftdb__pb2.LeaderRequest.SerializeToString,
+                response_deserializer=raftdb__pb2.LeaderResponse.FromString,
+                )
 
 
 class ClientServicer(object):
@@ -41,6 +46,12 @@ class ClientServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Leader(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ClientServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -53,6 +64,11 @@ def add_ClientServicer_to_server(servicer, server):
                     servicer.Put,
                     request_deserializer=raftdb__pb2.PutRequest.FromString,
                     response_serializer=raftdb__pb2.PutResponse.SerializeToString,
+            ),
+            'Leader': grpc.unary_unary_rpc_method_handler(
+                    servicer.Leader,
+                    request_deserializer=raftdb__pb2.LeaderRequest.FromString,
+                    response_serializer=raftdb__pb2.LeaderResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -95,6 +111,23 @@ class Client(object):
         return grpc.experimental.unary_unary(request, target, '/Client/Put',
             raftdb__pb2.PutRequest.SerializeToString,
             raftdb__pb2.PutResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def Leader(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Client/Leader',
+            raftdb__pb2.LeaderRequest.SerializeToString,
+            raftdb__pb2.LeaderResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -212,6 +245,11 @@ class ConsensusStub(object):
                 request_serializer=raftdb__pb2.CorrectionEntry.SerializeToString,
                 response_deserializer=raftdb__pb2.CorrectionEntryResponse.FromString,
                 )
+        self.ClearDurabilityLog = channel.unary_unary(
+                '/Consensus/ClearDurabilityLog',
+                request_serializer=raftdb__pb2.ClearDurabilityLogRequest.SerializeToString,
+                response_deserializer=raftdb__pb2.ClearDurabilityLogResponse.FromString,
+                )
 
 
 class ConsensusServicer(object):
@@ -229,6 +267,12 @@ class ConsensusServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ClearDurabilityLog(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ConsensusServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -241,6 +285,11 @@ def add_ConsensusServicer_to_server(servicer, server):
                     servicer.AppendCorrection,
                     request_deserializer=raftdb__pb2.CorrectionEntry.FromString,
                     response_serializer=raftdb__pb2.CorrectionEntryResponse.SerializeToString,
+            ),
+            'ClearDurabilityLog': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClearDurabilityLog,
+                    request_deserializer=raftdb__pb2.ClearDurabilityLogRequest.FromString,
+                    response_serializer=raftdb__pb2.ClearDurabilityLogResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -283,5 +332,22 @@ class Consensus(object):
         return grpc.experimental.unary_unary(request, target, '/Consensus/AppendCorrection',
             raftdb__pb2.CorrectionEntry.SerializeToString,
             raftdb__pb2.CorrectionEntryResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def ClearDurabilityLog(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Consensus/ClearDurabilityLog',
+            raftdb__pb2.ClearDurabilityLogRequest.SerializeToString,
+            raftdb__pb2.ClearDurabilityLogResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

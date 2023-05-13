@@ -3,6 +3,7 @@ syntax = "proto3";
 service Client {
 	rpc Get (GetRequest) returns (GetResponse) {}
 	rpc Put (PutRequest) returns (PutResponse) {}
+	rpc Leader (LeaderRequest) returns (LeaderResponse) {}
 }
 
 service RaftElectionService {
@@ -26,6 +27,14 @@ message PutRequest {
 	int32 sequence_number = 4;
 }
 
+message LeaderRequest {
+}
+
+message LeaderResponse {
+	int32 code = 1;
+	string leaderId = 2;
+}
+
 message GetResponse {
 	int32 code = 1;
 	repeated int32 value = 2;
@@ -34,7 +43,6 @@ message GetResponse {
 
 message PutResponse {
 	int32 code = 1;
-	string leaderId = 2;
 }
 
 message HeartbeatRequest {
@@ -57,16 +65,14 @@ message LogEntry {
 		repeated int32 value = 2;
 		int32 clientid = 3;
 		int32 sequence_number = 4;
+		int32 term = 5;
+		int32 logIndex = 6;
 	}
-
-	int32 term = 1;
-	int32 logIndex = 2;
-	int32 prev_term = 3;
-	int32 prev_log_index = 4;
-	int32 lastCommitIndex = 5;
-	# has to be repeated
-	Entry entry = 6;
-	int32 current_term = 7;
+	int32 prev_term = 1;
+	int32 prev_log_index = 2;
+	int32 lastCommitIndex = 3;
+	repeated Entry entry = 4;
+	int32 current_term = 5;
 }
 
 message LogEntryResponse {

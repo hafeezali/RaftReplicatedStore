@@ -5,6 +5,7 @@ from store.database import Database
 from logs.log import Log
 import os
 import grpc
+import time
 import protos.raftdb_pb2 as raftdb
 import protos.raftdb_pb2_grpc as raftdb_grpc
 import raft.config as config
@@ -31,9 +32,12 @@ class Server(raftdb_grpc.ClientServicer):
 
         # Start thread for election service
         Thread(target=self.election.run_election_service()).start()
+        
 
         self.consensus = Consensus(peers=peer_list, log=self.log, logger=self.logger)
         # Create thread to trigger consensus periodically in the background
+        Thread(target=self.async_consensus).start()
+
         self.logger.info("Finished starting server... " + self.server_id)
 
     # non-nil ext operation. 
@@ -51,34 +55,72 @@ class Server(raftdb_grpc.ClientServicer):
         if leader_id == self.server_id:
             values = list()
             for k in request.key:
-                v = self.store.get(k)
-                # None removed, now adding the value not found (-999) in the list. Handling the value on the client side
-                values.append(v) 
-            return raftdb.GetResponse(code = config.RESPONSE_CODE_OK, value = values, leaderId = leader_id)
+                # check if that particular key is in the durability log, if not -> then directly query from the database, using the same old get function
+                self.logger.info(f"{self.log.durability_log}")
+                if self.log.get_dura_log_map(k) == -1 :
+                    v = self.store.get(k)
+                    self.logger.info(f"{v}")
+                    values.append(v) 
+                # if the key is there in the durability log, copy the entire durability log to consensus log, now start consensus on the consensus log for those added entries
+                else :
+                    start_idx, last_idx = self.log.copy_dura_to_consensus_log()
+                    # copied everything to the consensus log, now should start consensus on those values
+                    status = self.groupConsensus(start_idx, last_idx) 
+                    if status == 'OK' :
+                        v = self.store.get(k)
+                        values.append(v)
+                    else :
+                        self.logger.info(f"Some issue with group consensus")    
+            return raftdb.GetResponse(code = config.RESPONSE_CODE_OK, value = values, leaderId = leader_id)     
+                    
+            
         else:
             self.logger.info(f"Redirecting client to leader {leader_id}")
             return raftdb.GetResponse(code = config.RESPONSE_CODE_REDIRECT, value = None, leaderId = leader_id)
+    
+    '''
+    This function is started by a thread in the background. It flushes the durability log to the consensus log
+    Gets the consensus on the added values to the consensus
+    All other things are handled in the group Consensus
+    '''
+    def async_consensus(self) :
+        time.sleep(100) 
+        while True :
+            self.logger.info(f"Starting consensus")
+            if self.server_id == self.log.get_leader() :
+                self.logger.info(f"Async consensus triggered")
+                start_idx, last_idx = self.log.copy_dura_to_consensus_log()
+                if last_idx != -1 and start_idx <= last_idx:
+                    status = self.groupConsensus(start_idx, last_idx)
+                    if status != config.RESPONSE_CODE_OK:
+                        self.logger.info(f"Some issue with async group consensus")
+            time.sleep(100) 
+            
+             
 
-    def groupConsensus(self):
-        pass
+    '''
+    This function is used to start group consensus on the particular values of the consensus log
+    '''          
+    def groupConsensus(self, start_idx, last_idx):
+        response = self.consensus.start_consensus(start_idx, last_idx)
+        return response
 
+    def Leader(self, request, context):
+        leader_id = self.log.get_leader()
+        if leader_id == None or leader_id == '' or leader_id == 'No leader' :
+           return raftdb.LeaderResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = leader_id)
+        else :
+            return raftdb.LeaderResponse(code = config.RESPONSE_CODE_OK, leaderId = leader_id)
+        
+    
     def Put(self, request, context):
         self.logger.info("Put request received for key: " + str(request.key) + ", and value: " + str(request.value) + ", from client: " + str(request.clientid))
-        leader_id = self.log.get_leader()
-
-        if leader_id == self.server_id:
-            response = self.consensus.handlePut(request)
-            if response == 'OK':
-                return raftdb.PutResponse(code = config.RESPONSE_CODE_OK, leaderId = leader_id)
-            else:
-                # Only scenario we will get 500 (config.RESPONSE_CODE_REJECT) is when node has become follower when previously it was leader
-                if response == config.RESPONSE_CODE_REJECT:
-
-                    self.logger.info("Put request failed... Redirecting it to new leader")
-                    return raftdb.PutResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = self.log.get_leader())
+        response = self.consensus.handlePut(request)
+        if response == 'OK':
+            return raftdb.PutResponse(code = config.RESPONSE_CODE_OK)
         else:
-            self.logger.info(f"Redirecting client to leader {leader_id}")
-            return raftdb.PutResponse(code = config.RESPONSE_CODE_REDIRECT, leaderId = leader_id)
+            self.logger.info("Put request failed")
+            return raftdb.PutResponse(code = config.RESPONSE_CODE_REJECT)
         
 
 def start_server_thread(port, grpc_server):
