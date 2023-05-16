@@ -1,5 +1,11 @@
 # RaftReplicatedStore
 
+# Branch info:
+
+main: Vanilla Raft Implementation
+main_v2: Optimized Raft 
+main_v3: Nil-ext Raft
+
 ## Team Members:
 
 Group 3: 
